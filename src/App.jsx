@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import React, { useState, useEffect } from "react"
+import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts"
 
 const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493885223299";

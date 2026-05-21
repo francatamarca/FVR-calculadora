@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts"
+import { useState, useEffect } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493885223299";
@@ -88,58 +88,68 @@ const calculate = (d, s) => {
 };
 
 /* 鈹€鈹€ WA MESSAGE 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
-const buildWAMsg = (d, r, rate, s) => [
-  `馃寪 *PRESUPUESTO DE IMPORTACI脫N*`, `*FVR Log铆stica Internacional*`, ``,
-  `馃懁 *Cliente:* ${d.nombre}`,
-  `馃摫 *WhatsApp:* ${d.whatsapp}`,
-  `馃摟 *Email:* ${d.email || "鈥�"}`,
-  `馃摝 *Producto:* ${d.producto}`,
-  `馃敘 *HS Code:* ${d.hsCode || "No indicado"}`,
-  d.aiSuggestion ? `馃 *An谩lisis IA:* ${d.aiSuggestion}` : "",
-  ``,
-  `馃殌 *Tipo:* ${d.tipo === "avion" ? `鉁堬笍 Avi贸n 鈥� ${d.subTipo === "personal" ? "Env铆o Personal (Franquicia)" : "Env铆o Comercial"}` : "馃殺 Barco"}`,
-  `馃挼 *FOB / Valor productos:* ${USD(r.fob)}`,
-  r.isAir
-    ? `鈿栵笍 Peso real: ${r.peso} kg | Volum茅trico: ${fmt(r.pVol)} kg | Facturable: *${fmt(r.pFact)} kg*`
-    : `馃搻 Volumen: ${fmt(r.m3, 3)} m鲁 | Facturable: *${fmt(r.m3Fact, 3)} m鲁*`,
-  ``,
-  `馃搳 *COSTOS DETALLADOS*`,
-  `鈥� Flete internacional: ${USD(r.flete)}`,
-  `鈥� Seguro (${s.insurance}%): ${USD(r.seguro)}`,
-  `鈥� CIF: ${USD(r.cif)}`,
-  r.isPersonal
-    ? `鈥� Franquicia personal (50% sobre excedente USD 400): ${USD(r.duty)}`
-    : `鈥� Derecho de importaci贸n (${r.effectiveDutyPct}%${d.aiDutyRate !== null ? " 鈥� v铆a IA" : ""}): ${USD(r.duty)}`,
-  r.isPersonal ? `鈥� Tasa estad铆stica: No aplica` : `鈥� Tasa estad铆stica (${s.stat}%): ${USD(r.stat)}`,
-  r.isPersonal ? `鈥� IVA: No aplica` : `鈥� IVA (${s.vat}%): ${USD(r.iva)}`,
-  ...(!r.isAir && !r.isPersonal
-    ? [`鈥� IVA adicional (${s.addVat}%): ${USD(r.addVat)}`,
-       `鈥� Ganancias (${s.gains}%): ${USD(r.gains)}`,
-       `鈥� Ingresos Brutos (${s.ib}%): ${USD(r.ib)}`]
-    : []),
-  ``,
-  `馃殮 *SERVICIOS LOG脥STICOS*`,
-  `鈥� Pick up / Retiro: ${USD(r.pickup)}`,
-  `鈥� Handling: ${USD(r.handling)}`,
-  `鈥� Env铆o nacional: ${USD(r.domestic)}`,
-  `鈥� Honorarios de gesti贸n (${s.feeType === "fixed" ? "fijo" : `${s.feePct}% s/${s.feeBase === "fob" ? "FOB" : "costos"}`}): ${USD(r.fees)}`,
-  ``,
-  `鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺恅,
-  `馃搵 Total env铆o (sin producto): *${USD(r.totalLog)}*`,
-  `馃挵 *TOTAL GENERAL: ${USD(r.totalGen)}*`,
-  rate ? `馃挶 *En pesos: ARS ${fmt(r.totalGen * rate, 0)}* (d贸lar $${fmt(rate)})` : "",
-  d.files?.length ? `馃搸 Archivos: ${d.files.join(", ")}` : "",
-  ``,
-  `_FVR Log铆stica Internacional_`,
-  `_Francisco Vega 路 +54 9 3885 223299_`,
-  `_www.fvrlogistica.com.ar_`,
-].filter(v => v !== undefined && v !== "").join("\n");
+const buildWAMsg = (d, r, rate, s) => {
+  const tipo = d.tipo === "avion"
+    ? `Avion - ${d.subTipo === "personal" ? "Envio Personal (Franquicia)" : "Envio Comercial"}`
+    : "Barco";
+  const lines = [
+    "== PRESUPUESTO DE IMPORTACION ==",
+    "FVR Logistica Internacional",
+    "",
+    "CLIENTE: " + d.nombre,
+    "WhatsApp: " + d.whatsapp,
+    "Email: " + (d.email || "-"),
+    "Producto: " + d.producto,
+    "HS Code: " + (d.hsCode || "No indicado"),
+    d.aiSuggestion ? "Analisis IA: " + d.aiSuggestion : "",
+    "",
+    "TIPO: " + tipo,
+    "FOB / Valor productos: " + USD(r.fob),
+    r.isAir
+      ? ("Peso real: " + r.peso + " kg | Volumetrico: " + fmt(r.pVol) + " kg | Facturable: " + fmt(r.pFact) + " kg")
+      : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
+    "",
+    "== COSTOS DETALLADOS ==",
+    "Flete internacional: " + USD(r.flete),
+    "Seguro (" + s.insurance + "%): " + USD(r.seguro),
+    "CIF / Valor en aduana: " + USD(r.cif),
+    r.isPersonal
+      ? ("Franquicia personal (50% sobre excedente USD 400): " + USD(r.duty))
+      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.aiDutyRate !== null ? " - via IA" : "") + "): " + USD(r.duty)),
+    r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
+    r.isPersonal ? "IVA: No aplica" : ("IVA (" + s.vat + "%): " + USD(r.iva)),
+    ...(!r.isAir && !r.isPersonal
+      ? [
+          "IVA adicional (" + s.addVat + "%): " + USD(r.addVat),
+          "Ganancias (" + s.gains + "%): " + USD(r.gains),
+          "Ingresos Brutos (" + s.ib + "%): " + USD(r.ib),
+        ]
+      : []),
+    "",
+    "== SERVICIOS LOGISTICOS ==",
+    "Pick up / Retiro: " + USD(r.pickup),
+    "Handling: " + USD(r.handling),
+    "Envio nacional: " + USD(r.domestic),
+    "Honorarios de gestion: " + USD(r.fees),
+    "",
+    "================================",
+    "Total envio (sin producto): *" + USD(r.totalLog) + "*",
+    "*TOTAL GENERAL: " + USD(r.totalGen) + "*",
+    rate ? ("En pesos: ARS " + fmt(r.totalGen * rate, 0) + " (dolar $" + fmt(rate) + ")") : "",
+    d.files && d.files.length ? ("Archivos adjuntos: " + d.files.join(", ")) : "",
+    "",
+    "FVR Logistica Internacional",
+    "Francisco Vega | +54 9 3885 223299",
+    "www.fvrlogistica.com.ar",
+  ];
+  return lines.filter(v => v !== undefined && v !== "").join("\n");
+};
 
 /* 鈹€鈹€ PDF HTML 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
 const generatePDFHTML = (d, r, dolar, s) => {
   const tipo = d.tipo === "avion"
-    ? `鉁堬笍 Avi贸n 鈥� ${d.subTipo === "personal" ? "Env铆o Personal (Franquicia)" : "Env铆o Comercial"}`
-    : "馃殺 Barco";
+    ? (d.subTipo === "personal" ? "Avion - Envio Personal (Franquicia)" : "Avion - Envio Comercial")
+    : "Barco";
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Presupuesto FVR 鈥� ${d.nombre}</title>
 <style>
@@ -344,4 +354,669 @@ const TypeSel = ({ value, onChange }) => (
 
 const SubTipoSel = ({ value, onChange }) => (
   <div style={{ marginTop:16 }}>
-    <p style={{ fontSize:11, font
+    <p style={{ fontSize:11, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>Tipo de env铆o</p>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      {[{ v:"comercial", icon:"馃彚", label:"Env铆o Comercial" }, { v:"personal", icon:"馃懁", label:"Env铆o Personal" }].map(({ v, icon, label }) => (
+        <button key={v} onClick={() => onChange(v)} type="button"
+          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#0ea5e9":"#e2e8f0"}`,
+            background: value===v ? "#f0f9ff" : "#f8fafc", cursor:"pointer",
+            display:"flex", alignItems:"center", gap:10,
+            boxShadow: value===v ? "0 2px 10px rgba(14,165,233,0.12)" : "none" }}>
+          <span style={{ fontSize:22 }}>{icon}</span>
+          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0369a1" : "#334155" }}>{label}</span>
+        </button>
+      ))}
+    </div>
+    {value === "personal" && (
+      <div style={{ marginTop:10, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:12, fontSize:12, color:"#92400e" }}>
+        <strong>馃彿锔� Franquicia personal:</strong> Sin derechos hasta USD 400. Si supera, se aplica <strong>50% sobre el excedente</strong>. Tasa estad铆stica e IVA <strong>no aplican</strong>.
+      </div>
+    )}
+  </div>
+);
+
+/* 鈹€鈹€ AI ANALYSIS 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const analyzeProduct = async (producto) => {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      messages: [{
+        role: "user",
+        content: `Eres un experto en comercio exterior argentino. Para el producto: "${producto}", determina:
+1. El c贸digo HS (arancelario) m谩s probable para importaci贸n a Argentina
+2. El porcentaje de derecho de importaci贸n aplicable (seg煤n nomenclatura arancelaria argentina SIM/VUCE)
+3. Una descripci贸n breve del producto
+
+Responde 脷NICAMENTE en JSON sin markdown ni backticks:
+{"hsCode":"XXXX.XX.XX","dutyRate":XX,"description":"descripci贸n breve","confidence":"alta/media/baja"}`
+      }]
+    })
+  });
+  const data = await res.json();
+  const text = data.content?.[0]?.text || "{}";
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
+};
+
+/* 鈹€鈹€ CALCULATOR FORM 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
+  const [form, setForm] = useState({
+    nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", fob:"",
+    tipo:"avion", subTipo:"comercial", peso:"", largo:"", ancho:"", alto:"",
+    m3manual:"", files:[], aiDutyRate: null, aiSuggestion: ""
+  });
+  const [errors, setErrors]       = useState({});
+  const [fileNames, setFileNames] = useState([]);
+  const [touched, setTouched]     = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult]   = useState(null);
+
+  const set = (k, v) => {
+    if (!touched) { onTrackStarted(); setTouched(true); }
+    setForm(f => ({ ...f, [k]: v }));
+  };
+
+  const handleAnalyzeProduct = async () => {
+    if (!form.producto.trim()) return;
+    setAiLoading(true);
+    try {
+      const result = await analyzeProduct(form.producto);
+      setAiResult(result);
+      setForm(f => ({
+        ...f,
+        hsCode: result.hsCode || f.hsCode,
+        aiDutyRate: result.dutyRate ?? null,
+        aiSuggestion: `${result.description} 鈥� Arancel estimado: ${result.dutyRate}% (confianza: ${result.confidence})`
+      }));
+    } catch (e) {
+      setAiResult({ error: true });
+    }
+    setAiLoading(false);
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.nombre.trim())  e.nombre  = "Requerido";
+    if (!form.whatsapp.trim()) e.whatsapp = "Requerido";
+    if (!form.producto.trim()) e.producto = "Requerido";
+    if (!form.fob || +form.fob <= 0) e.fob = "Ingres谩 un valor mayor a 0";
+    if (!form.peso || +form.peso <= 0) e.peso = "Ingres谩 el peso total";
+    if (form.tipo === "avion" && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingres谩 largo, ancho y alto";
+    if (form.tipo === "barco" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingres谩 los metros c煤bicos";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleFiles = (e) => {
+    const names = Array.from(e.target.files).map(f => f.name);
+    setFileNames(names);
+    setForm(f => ({ ...f, files: names }));
+  };
+
+  const pVol  = form.tipo === "avion" && form.largo && form.ancho && form.alto
+    ? (+form.largo * +form.ancho * +form.alto) / 5000 : 0;
+  const pFact = Math.max(pVol, +form.peso || 0);
+  const m3p   = +form.m3manual || 0;
+  const m3f   = Math.max(+settings.seaMin || 1, m3p);
+
+  const rowS = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
+      <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh} />
+      <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
+
+        <Card icon="馃懁" title="Datos del cliente" bg="#eff6ff">
+          <div style={rowS}>
+            <Field label="Nombre completo" required>
+              <Inp placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+              {errors.nombre && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.nombre}</p>}
+            </Field>
+            <Field label="WhatsApp" required>
+              <Inp placeholder="+54 9 ..." value={form.whatsapp} onChange={e => set("whatsapp", e.target.value)} />
+              {errors.whatsapp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.whatsapp}</p>}
+            </Field>
+          </div>
+          <Field label="Email">
+            <Inp type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+          </Field>
+        </Card>
+
+        <Card icon="馃摝" title="Datos del producto">
+          <Field label="Producto" required>
+            <div style={{ display:"flex", gap:8 }}>
+              <Inp placeholder="Descripci贸n del producto" value={form.producto}
+                onChange={e => set("producto", e.target.value)} style={{ flex:1 }} />
+              <button onClick={handleAnalyzeProduct} disabled={aiLoading || !form.producto.trim()}
+                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading ? "#e2e8f0" : "linear-gradient(135deg,#0369a1,#0ea5e9)",
+                  color: aiLoading ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading ? "wait" : "pointer", whiteSpace:"nowrap" }}>
+                {aiLoading ? "鈴� Analizando鈥�" : "馃 Analizar IA"}
+              </button>
+            </div>
+            {errors.producto && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.producto}</p>}
+          </Field>
+
+          {aiResult && !aiResult.error && (
+            <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:10, marginBottom:16, fontSize:12 }}>
+              <p style={{ fontWeight:700, color:"#166534", marginBottom:4 }}>鉁� An谩lisis IA completado</p>
+              <p style={{ color:"#15803d" }}>馃搵 {aiResult.description}</p>
+              <p style={{ color:"#15803d" }}>馃敘 HS Code sugerido: <strong>{aiResult.hsCode}</strong></p>
+              <p style={{ color:"#15803d" }}>馃搳 Arancel estimado: <strong>{aiResult.dutyRate}%</strong> 鈥� confianza: {aiResult.confidence}</p>
+              <p style={{ color:"#4ade80", fontSize:11, marginTop:4 }}>鈿� Verificar con despachante de aduana antes de operar</p>
+            </div>
+          )}
+          {aiResult?.error && (
+            <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:10, marginBottom:16, fontSize:12, color:"#991b1b" }}>
+              No se pudo analizar el producto. Complet谩 el HS Code manualmente.
+            </div>
+          )}
+
+          <div style={rowS}>
+            <Field label="HS Code / C贸digo arancelario" hint="Se completa autom谩ticamente con la IA">
+              <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} />
+            </Field>
+            <Field label="Valor FOB / Valor productos (USD)" required hint="Valor total seg煤n factura del proveedor">
+              <div style={{ position:"relative" }}>
+                <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#94a3b8", fontWeight:700 }}>USD</span>
+                <Inp type="number" placeholder="0.00" value={form.fob} onChange={e => set("fob", e.target.value)} style={{ paddingLeft:48 }} />
+              </div>
+              {errors.fob && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.fob}</p>}
+            </Field>
+          </div>
+        </Card>
+
+        <Card icon="馃寪" title="Tipo de importaci贸n" bg="#f0f9ff">
+          <TypeSel value={form.tipo} onChange={v => set("tipo", v)} />
+          {form.tipo === "avion" && <SubTipoSel value={form.subTipo} onChange={v => set("subTipo", v)} />}
+        </Card>
+
+        <Card icon="馃搻" title="Peso y medidas">
+          {form.tipo === "avion" && (
+            <>
+              <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Medidas del paquete para calcular el <strong>peso volum茅trico</strong></p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+                <Field label="Largo (cm)"><Inp type="number" placeholder="0" value={form.largo} onChange={e => set("largo", e.target.value)} /></Field>
+                <Field label="Ancho (cm)"><Inp type="number" placeholder="0" value={form.ancho} onChange={e => set("ancho", e.target.value)} /></Field>
+                <Field label="Alto (cm)"><Inp type="number" placeholder="0" value={form.alto}  onChange={e => set("alto",  e.target.value)} /></Field>
+              </div>
+              {errors.medidas && <p style={{ color:"#ef4444", fontSize:11, marginBottom:12 }}>{errors.medidas}</p>}
+            </>
+          )}
+          {form.tipo === "barco" && (
+            <>
+              <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Ingres谩 el <strong>volumen total en m鲁</strong> del embarque</p>
+              <Field label="Metros c煤bicos (m鲁)" required hint={`USD ${settings.seaRate || 600}/m鲁 路 M铆n. facturable: ${settings.seaMin || 1} m鲁`}>
+                <div style={{ position:"relative" }}>
+                  <Inp type="number" placeholder="Ej: 1.3" value={form.m3manual} step="0.01"
+                    onChange={e => set("m3manual", e.target.value)} style={{ paddingRight:40 }} />
+                  <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8", fontWeight:700 }}>m鲁</span>
+                </div>
+                {errors.m3manual && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.m3manual}</p>}
+              </Field>
+            </>
+          )}
+          <Field label="Peso real total (kg)" required>
+            <div style={{ position:"relative" }}>
+              <Inp type="number" placeholder="0.00" value={form.peso} onChange={e => set("peso", e.target.value)} style={{ paddingRight:36 }} />
+              <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
+            </div>
+            {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
+          </Field>
+
+          {form.tipo === "avion" && form.largo && form.ancho && form.alto && form.peso && (
+            <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa 路 Avi贸n</p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
+                <div><p style={{ color:"#94a3b8" }}>Peso volum茅trico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
+                <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
+                <div><p style={{ color:"#0369a1" }}>Facturable</p><p style={{ fontWeight:700, color:"#0369a1" }}>{fmt(pFact)} kg</p></div>
+              </div>
+            </div>
+          )}
+          {form.tipo === "barco" && m3p > 0 && (
+            <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa 路 Barco</p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
+                <div><p style={{ color:"#94a3b8" }}>Vol. ingresado</p><p style={{ fontWeight:700 }}>{fmt(m3p, 3)} m鲁</p></div>
+                <div><p style={{ color:"#94a3b8" }}>Facturable</p><p style={{ fontWeight:700, color:"#0369a1" }}>{fmt(m3f, 3)} m鲁</p></div>
+                <div><p style={{ color:"#94a3b8" }}>Costo flete</p><p style={{ fontWeight:700, color:"#0369a1" }}>{USD(m3f * (+settings.seaRate || 600))}</p></div>
+              </div>
+              {m3p < 1 && <p style={{ fontSize:11, color:"#d97706", marginTop:6 }}>鈿� Menos de 1 m鲁 鈥� se cobra tarifa m铆nima de 1 m鲁</p>}
+            </div>
+          )}
+        </Card>
+
+        <Card icon="馃搸" title="Documentos (opcional)">
+          <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Adjunt谩 la <strong>factura proforma</strong> y <strong>packing list</strong> del proveedor.</p>
+          <label htmlFor="fvr-upload"
+            style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:20,
+              border:"2px dashed #7dd3fc", borderRadius:14, cursor:"pointer", background:"white",
+              color:"#0369a1", fontSize:13 }}>
+            <span style={{ fontSize:32 }}>馃搨</span>
+            <span style={{ fontWeight:700 }}>Clic aqu铆 para adjuntar archivos</span>
+            <span style={{ fontSize:11, color:"#94a3b8" }}>PDF 路 JPG 路 PNG 路 DOC</span>
+          </label>
+          <input id="fvr-upload" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            style={{ display:"none" }} onChange={handleFiles} />
+          {fileNames.length > 0 && (
+            <div style={{ marginTop:10 }}>
+              {fileNames.map((f, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, background:"#f0fdf4", color:"#166534", padding:"6px 12px", borderRadius:8, marginBottom:4, border:"1px solid #bbf7d0" }}>
+                  <span>鉁�</span><span>{f}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:14, marginBottom:20, fontSize:12, color:"#92400e" }}>
+          鈿狅笍 {settings.legal}
+        </div>
+
+        <button onClick={() => { if (validate()) onCalculate(form, calculate(form, settings)); }}
+          style={{ width:"100%", padding:"16px 0", borderRadius:16, border:"none",
+            background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"white",
+            fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 4px 20px rgba(3,105,161,0.35)" }}>
+          Calcular mi importaci贸n 鈫�
+        </button>
+        <p style={{ textAlign:"center", fontSize:12, color:"#94a3b8", marginTop:12 }}>Valores en USD 路 Conversi贸n autom谩tica a ARS</p>
+      </main>
+
+      <footer style={{ textAlign:"center", padding:"24px 16px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #e2e8f0", marginTop:16 }}>
+        <p style={{ fontWeight:700, color:"#475569", marginBottom:4 }}>FVR Log铆stica Internacional</p>
+        <p>Francisco Vega 路 frannciissco@gmail.com 路 +54 9 3885 223299</p>
+        <div style={{ display:"flex", justifyContent:"center", gap:20, marginTop:8 }}>
+          <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>馃寪 fvrlogistica.com.ar</a>
+          <a href="https://linktr.ee/FVRcomex" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>馃敆 Linktree</a>
+        </div>
+      </footer>
+      <WAFloat />
+    </div>
+  );
+};
+
+/* 鈹€鈹€ ROW 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const Row = ({ label, usd, dolar, hi, na, note }) => (
+  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+    padding:"10px 16px", borderBottom:"1px solid #f1f5f9",
+    background: hi ? "#eff6ff" : "transparent" }}>
+    <div>
+      <span style={{ fontSize:13, fontWeight: hi ? 700 : 400, color: hi ? "#0369a1" : "#334155" }}>{label}</span>
+      {note && <p style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{note}</p>}
+    </div>
+    {na
+      ? <span style={{ fontSize:12, color:"#94a3b8", fontStyle:"italic", flexShrink:0, marginLeft:12 }}>No aplica</span>
+      : <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
+          <div style={{ fontSize:13, fontWeight:600, color: hi ? "#0369a1" : "#1e293b" }}>{USD(usd)}</div>
+          {dolar && <div style={{ fontSize:11, color:"#94a3b8" }}>{ARS(usd, dolar)}</div>}
+        </div>
+    }
+  </div>
+);
+
+/* 鈹€鈹€ RESULTS VIEW 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWhatsApp }) => {
+  const tipoLabel = d.tipo === "avion"
+    ? (d.subTipo === "personal" ? "Avion - Envio Personal (Franquicia)" : "Avion - Envio Comercial")
+    : "Barco";
+
+  const handleDownloadPDF = () => {
+    const html = generatePDFHTML(d, r, dolar, s);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `Presupuesto-FVR-${d.nombre.replace(/\s+/g, "-")}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const handleWA = () => {
+    const msg = buildWAMsg(d, r, dolar, s);
+    const url = `https://wa.me/${WA_NUM}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
+      <Header onAdmin={() => {}} dolar={dolar} dolarErr={false} dolarLoading={false} onRefreshDolar={() => {}} />
+      <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
+
+        {/* Hero */}
+        <div style={{ background:"linear-gradient(135deg,#0d2347 0%,#0369a1 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(13,35,71,0.35)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+            <div>
+              <p style={{ fontSize:11, color:"#7dd3fc", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>Presupuesto para</p>
+              <h2 style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>{d.nombre}</h2>
+              <p style={{ fontSize:13, color:"#93c5fd" }}>{d.producto} 路 {tipoLabel}</p>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>Total General</p>
+              <p style={{ fontSize:26, fontWeight:900 }}>{USD(r.totalGen)}</p>
+              {dolar && <p style={{ fontSize:13, color:"#93c5fd" }}>{ARS(r.totalGen, dolar)}</p>}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, borderTop:"1px solid rgba(255,255,255,0.15)", paddingTop:14 }}>
+            <div style={{ textAlign:"center" }}>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>FOB / Valor prod.</p>
+              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.fob)}</p>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>Env铆o total</p>
+              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.totalLog)}</p>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.isAir ? "Kg facturable" : "M鲁 facturable"}</p>
+              <p style={{ fontWeight:700, fontSize:14 }}>{r.isAir ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m鲁`}</p>
+            </div>
+          </div>
+        </div>
+
+        {r.isPersonal && (
+          <div style={{ background:"#fffbeb", border:"1px solid #fbbf24", borderRadius:14, padding:"12px 16px", marginBottom:16, display:"flex", gap:10 }}>
+            <span style={{ fontSize:20 }}>馃彿锔�</span>
+            <div>
+              <p style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>Franquicia de env铆o personal activa</p>
+              <p style={{ fontSize:12, color:"#b45309" }}>
+                {r.fob <= 400 ? "FOB 鈮� USD 400 鈥� sin derechos de importaci贸n." : `Excedente de USD 400: ${USD(r.fob - 400)} 鈫� Derecho (50%): ${USD(r.duty)}`}
+                {" "}Tasa estad铆stica, IVA y dem谩s impuestos no aplican.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {d.aiDutyRate !== null && d.aiDutyRate !== undefined && (
+          <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:14, padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
+            <span style={{ fontSize:20 }}>馃</span>
+            <p style={{ fontSize:12, color:"#166534" }}>
+              <strong>An谩lisis IA:</strong> Derecho de importaci贸n calculado al <strong>{d.aiDutyRate}%</strong> seg煤n tipo de producto detectado. Verificar con despachante.
+            </p>
+          </div>
+        )}
+
+        <Card icon="馃寪" title="Flete internacional">
+          <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
+          {r.isAir ? (<>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Peso real total</span><span style={{ fontWeight:600 }}>{fmt(r.peso)} kg</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Peso volum茅trico (L脳A脳H / 5.000)</span><span style={{ fontWeight:600 }}>{fmt(r.pVol)} kg</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
+              <span style={{ fontWeight:700, color:"#0369a1" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.pFact)} kg</span>
+            </div>
+            <Row label={`Tarifa a茅rea (USD ${s.airRate}/kg)`} usd={r.flete} dolar={dolar} />
+          </>) : (<>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Volumen ingresado</span><span style={{ fontWeight:600 }}>{fmt(r.m3, 3)} m鲁</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
+              <span style={{ fontWeight:700, color:"#0369a1" }}>Volumen facturable (m铆n. {s.seaMin} m鲁)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.m3Fact, 3)} m鲁</span>
+            </div>
+            <Row label={`Tarifa mar铆tima (USD ${s.seaRate}/m鲁)`} usd={r.flete} dolar={dolar} />
+          </>)}
+        </Card>
+
+        <Card icon="馃洝锔�" title="Seguro y valor CIF">
+          <Row label={`Seguro (${s.insurance}% sobre FOB + flete)`} usd={r.seguro} dolar={dolar} />
+          <Row label="CIF = FOB + Flete + Seguro" usd={r.cif} dolar={dolar} hi />
+        </Card>
+
+        <Card icon="馃彌锔�" title="Tributos aduaneros">
+          {r.isPersonal ? (<>
+            <Row label="Derecho de importaci贸n (franquicia personal)" usd={r.duty} dolar={dolar}
+              note={r.fob <= 400 ? "FOB 鈮� USD 400 鈥� sin derecho" : `50% sobre USD ${fmt(r.fob - 400)} excedente`} />
+            <Row label="Tasa estad铆stica" na />
+            <Row label={`IVA (${s.vat}%)`} na />
+          </>) : (<>
+            <Row label={`Derecho de importaci贸n (${r.effectiveDutyPct}%${d.aiDutyRate !== null ? " 路 IA" : ""})`} usd={r.duty} dolar={dolar} />
+            <Row label={`Tasa estad铆stica (${s.stat}%)`} usd={r.stat} dolar={dolar} />
+            <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
+            <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
+          </>)}
+        </Card>
+
+        <Card icon="馃搳" title="Impuestos internos">
+          {r.isAir
+            ? <div style={{ textAlign:"center", padding:"20px 0" }}>
+                <p style={{ fontSize:32, marginBottom:8 }}>鉁堬笍</p>
+                <p style={{ fontSize:13, color:"#64748b" }}>Los impuestos internos no aplican para importaci贸n por avi贸n.</p>
+              </div>
+            : (<>
+                <Row label={`IVA adicional (${s.addVat}%)`} usd={r.addVat} dolar={dolar} />
+                <Row label={`Ganancias (${s.gains}%)`} usd={r.gains} dolar={dolar} />
+                <Row label={`Ingresos Brutos (${s.ib}%)`} usd={r.ib} dolar={dolar} />
+              </>)
+          }
+        </Card>
+
+        <Card icon="馃殮" title="Servicios log铆sticos">
+          <Row label="Pick up / Retiro en origen" usd={r.pickup} dolar={dolar} />
+          <Row label="Handling" usd={r.handling} dolar={dolar} />
+          <Row label="Env铆o nacional" usd={r.domestic} dolar={dolar} />
+          <Row label={`Honorarios de gesti贸n (${s.feeType === "fixed" ? "fijo" : `${s.feePct}% s/${s.feeBase === "fob" ? "FOB" : "costos"}`})`} usd={r.fees} dolar={dolar} hi />
+        </Card>
+
+        {/* Totales */}
+        <div style={{ background:"#0d2347", borderRadius:20, overflow:"hidden", boxShadow:"0 4px 24px rgba(13,35,71,0.35)", marginBottom:20 }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
+            <p style={{ fontSize:11, color:"white", fontWeight:700, textTransform:"uppercase", letterSpacing:2 }}>Resumen final</p>
+          </div>
+          <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <p style={{ fontSize:11, color:"#7dd3fc", marginBottom:4 }}>Total env铆o (sin producto)</p>
+              <p style={{ fontSize:20, fontWeight:700, color:"white" }}>{USD(r.totalLog)}</p>
+            </div>
+            {dolar && <p style={{ fontSize:14, color:"#93c5fd", fontWeight:600 }}>{ARS(r.totalLog, dolar)}</p>}
+          </div>
+          <div style={{ padding:"20px", background:"rgba(14,165,233,0.15)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <p style={{ fontSize:11, color:"#93c5fd", marginBottom:4 }}>TOTAL GENERAL DE IMPORTACI脫N</p>
+              <p style={{ fontSize:28, fontWeight:900, color:"white" }}>{USD(r.totalGen)}</p>
+            </div>
+            {dolar && <div style={{ textAlign:"right" }}>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>Al d贸lar oficial ${fmt(dolar)}</p>
+              <p style={{ fontSize:18, fontWeight:700, color:"white" }}>{ARS(r.totalGen, dolar)}</p>
+            </div>}
+          </div>
+        </div>
+
+        <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:14, marginBottom:20, fontSize:12, color:"#92400e" }}>鈿狅笍 {s.legal}</div>
+
+        {/* ACTION BUTTONS */}
+        <div style={{ marginBottom:32 }}>
+          {/* WhatsApp */}
+          <button onClick={handleWA}
+            style={{ width:"100%", padding:"16px 0", borderRadius:16, border:"none",
+              background:"linear-gradient(135deg,#16a34a,#22c55e)", color:"white",
+              fontSize:17, fontWeight:900, cursor:"pointer", marginBottom:12,
+              display:"flex", alignItems:"center", justifyContent:"center", gap:12,
+              boxShadow:"0 4px 20px rgba(22,163,74,0.35)" }}>
+            <WAIcon cls="w-6 h-6" />
+            Enviar presupuesto por WhatsApp
+          </button>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {/* PDF Download */}
+            <button onClick={handleDownloadPDF}
+              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #bae6fd",
+                background:"white", color:"#0369a1", fontSize:14, fontWeight:700,
+                cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              馃搫 Descargar PDF
+            </button>
+            {/* Back */}
+            <button onClick={onBack}
+              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #e2e8f0",
+                background:"white", color:"#475569", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+              鈫� Nueva consulta
+            </button>
+          </div>
+          <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
+            El PDF se descarga como HTML 鈥� abrilo en el navegador y presion谩 Ctrl+P para guardar como PDF
+          </p>
+        </div>
+      </main>
+      <WAFloat />
+    </div>
+  );
+};
+
+/* 鈹€鈹€ ADMIN LOGIN 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const AdminLogin = ({ onLogin, onBack }) => {
+  const [pass, setPass] = useState(""); const [err, setErr] = useState(false);
+  const go = () => { if (pass === ADMIN_PASS) { setErr(false); onLogin(); } else setErr(true); };
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f0f4f8" }}>
+      <div style={{ background:"white", borderRadius:20, boxShadow:"0 4px 32px rgba(0,0,0,0.12)", padding:36, width:"100%", maxWidth:360 }}>
+        <div style={{ textAlign:"center", marginBottom:24 }}>
+          <div style={{ width:56, height:56, borderRadius:16, background:"linear-gradient(135deg,#0369a1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"white", fontSize:18, margin:"0 auto 12px" }}>FVR</div>
+          <h2 style={{ fontSize:20, fontWeight:700, color:"#1e293b" }}>Panel Administrador</h2>
+          <p style={{ fontSize:13, color:"#64748b" }}>FVR Log铆stica Internacional</p>
+        </div>
+        <Field label="Contrase帽a">
+          <Inp type="password" placeholder="Ingres谩 la contrase帽a" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} />
+        </Field>
+        {err && <p style={{ color:"#ef4444", textAlign:"center", marginBottom:12, fontSize:13 }}>Contrase帽a incorrecta</p>}
+        <button onClick={go} style={{ width:"100%", padding:14, borderRadius:12, border:"none", background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"white", fontWeight:700, fontSize:15, cursor:"pointer" }}>Ingresar</button>
+        <button onClick={onBack} style={{ width:"100%", marginTop:12, background:"none", border:"none", color:"#64748b", fontSize:13, cursor:"pointer" }}>鈫� Volver a la calculadora</button>
+      </div>
+    </div>
+  );
+};
+
+/* 鈹€鈹€ QUOTE CARD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const QuoteCard = ({ q, dolar, onStatusChange }) => {
+  const [open, setOpen] = useState(false); const r = q.results;
+  return (
+    <div style={{ background:"white", borderRadius:16, border:"1px solid #f1f5f9", overflow:"hidden", marginBottom:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:16, cursor:"pointer" }} onClick={() => setOpen(o => !o)}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <span style={{ fontSize:22 }}>{q.importType === "avion" ? "鉁堬笍" : "馃殺"}</span>
+          <div>
+            <p style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{q.client}</p>
+            <p style={{ fontSize:12, color:"#64748b" }}>{q.product} 路 {new Date(q.date).toLocaleDateString("es-AR")}</p>
+            {q.formData?.subTipo === "personal" && <span style={{ fontSize:11, background:"#fef3c7", color:"#92400e", padding:"2px 8px", borderRadius:99, fontWeight:700 }}>Env铆o personal</span>}
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ textAlign:"right" }}>
+            <p style={{ fontSize:13, fontWeight:700, color:"#0369a1" }}>{USD(r?.totalGen)}</p>
+            {dolar && <p style={{ fontSize:11, color:"#94a3b8" }}>{ARS(r?.totalGen || 0, dolar)}</p>}
+          </div>
+          <Badge status={q.status} />
+          <span style={{ color:"#94a3b8", fontSize:13 }}>{open ? "鈻�" : "鈻�"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ borderTop:"1px solid #f1f5f9", padding:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14, fontSize:13 }}>
+            <div><p style={{ fontSize:11, color:"#94a3b8" }}>WhatsApp</p>
+              <a href={`https://wa.me/${(q.whatsapp||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{ fontWeight:700, color:"#16a34a" }}>{q.whatsapp}</a>
+            </div>
+            <div><p style={{ fontSize:11, color:"#94a3b8" }}>Email</p><p style={{ fontWeight:700 }}>{q.email || "鈥�"}</p></div>
+            <div><p style={{ fontSize:11, color:"#94a3b8" }}>HS Code</p><p style={{ fontWeight:700 }}>{q.hsCode || "鈥�"}</p></div>
+            <div><p style={{ fontSize:11, color:"#94a3b8" }}>Archivos</p><p style={{ fontSize:12 }}>{q.formData?.files?.length ? q.formData.files.join(", ") : "Ninguno"}</p></div>
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
+            <span style={{ fontSize:12, color:"#64748b", fontWeight:700 }}>Estado:</span>
+            {Object.entries(STATUS_MAP).map(([k, v]) => (
+              <button key={k} onClick={() => onStatusChange(q.id, k)}
+                style={{ fontSize:12, padding:"4px 10px", borderRadius:99, border:`2px solid ${q.status===k?"#0ea5e9":"#e2e8f0"}`,
+                  background: q.status===k ? "#eff6ff" : "white", color: q.status===k ? "#0369a1" : "#64748b",
+                  fontWeight:700, cursor:"pointer" }}>{v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* 鈹€鈹€ ADMIN PANEL 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
+const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics, dolar, fetchDolar, onLogout }) => {
+  const [tab, setTab]   = useState("dashboard");
+  const [s, setS]       = useState({ ...settings });
+  const [saved, setSaved] = useState(false);
+  const [filter, setFilter] = useState({ status:"", tipo:"", q:"" });
+
+  const save = () => { saveSettings(s); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const SF = ({ label, k, min, max, step="0.01" }) => (
+    <Field label={label}>
+      <Inp type="number" min={min} max={max} step={step} value={s[k]} onChange={e => setS(p => ({ ...p, [k]: +e.target.value }))} />
+    </Field>
+  );
+  const Toggle = ({ label, k }) => (
+    <label style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", cursor:"pointer" }}>
+      <span style={{ fontSize:13, color:"#334155" }}>{label}</span>
+      <button onClick={() => setS(p => ({ ...p, [k]: !p[k] }))}
+        style={{ width:44, height:24, borderRadius:99, background: s[k] ? "#0ea5e9" : "#cbd5e1", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+        <span style={{ position:"absolute", top:2, width:20, height:20, background:"white", borderRadius:"50%", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"left 0.2s", left: s[k] ? 22 : 2 }} />
+      </button>
+    </label>
+  );
+
+  const fq = quotes.filter(q => {
+    if (filter.status && q.status !== filter.status) return false;
+    if (filter.tipo && q.importType !== filter.tipo) return false;
+    if (filter.q && !q.client?.toLowerCase().includes(filter.q.toLowerCase()) && !q.product?.toLowerCase().includes(filter.q.toLowerCase())) return false;
+    return true;
+  });
+
+  const exportCSV = () => {
+    const H = ["Fecha","Cliente","WhatsApp","Email","Producto","HS Code","Tipo","SubTipo","FOB","Total Env铆o","Total General","Estado"];
+    const R = quotes.map(q => [new Date(q.date).toLocaleDateString("es-AR"),q.client,q.whatsapp,q.email,q.product,q.hsCode,q.importType,q.formData?.subTipo||"鈥�",q.results?.fob,q.results?.totalLog,q.results?.totalGen,q.status]);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\uFEFF"+[H,...R].map(r=>r.join(",")).join("\n")],{type:"text/csv;charset=utf-8;"}));
+    a.download = "fvr_presupuestos.csv"; a.click();
+  };
+
+  const last7 = Array.from({length:7},(_,i)=>{ const dt=new Date(); dt.setDate(dt.getDate()-(6-i)); const ds=dt.toLocaleDateString("es-AR"); return {day:dt.toLocaleDateString("es-AR",{weekday:"short"}),count:quotes.filter(q=>new Date(q.date).toLocaleDateString("es-AR")===ds).length}; });
+  const sdData = Object.entries(quotes.reduce((a,q)=>{a[q.status||"nuevo"]=(a[q.status||"nuevo"]||0)+1;return a;},{})).map(([n,v])=>({name:STATUS_MAP[n]?.label||n,value:v}));
+  const CLR = ["#0ea5e9","#f59e0b","#22c55e","#94a3b8"];
+
+  const navStyle = (id) => ({
+    display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:12,
+    border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
+    background: tab===id ? "#0ea5e9" : "transparent",
+    color: tab===id ? "white" : "#475569",
+    boxShadow: tab===id ? "0 2px 8px rgba(14,165,233,0.3)" : "none",
+  });
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
+      <div style={{ background:"linear-gradient(135deg,#0a1628,#0d2347)", color:"white", padding:"14px 20px" }}>
+        <div style={{ maxWidth:900, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#38bdf8,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#0c2340", fontSize:12 }}>FVR</div>
+            <div><p style={{ fontWeight:700, fontSize:14 }}>Panel Administrador</p><p style={{ fontSize:11, color:"#7dd3fc" }}>FVR Log铆stica Internacional</p></div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12, color:"#7dd3fc" }}>
+            <span>D贸lar: ${fmt(dolar)}</span>
+            <button onClick={fetchDolar} style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:16 }}>鈫�</button>
+            <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.1)", border:"none", color:"white", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Cerrar sesi贸n</button>
+          </div>
+        </div>
+      </div>
+      <div style={{ background:"white", borderBottom:"1px solid #e2e8f0", padding:"8px 20px" }}>
+        <div style={{ maxWidth:900, margin:"0 auto", display:"flex", gap:8, overflowX:"auto" }}>
+          <button style={navStyle("dashboard")} onClick={() => setTab("dashboard")}>馃搳 Dashboard</button>
+          <button style={navStyle("quotes")} onClick={() => setTab("quotes")}>馃搵 Presupuestos ({quotes.length})</button>
+          <button style={navStyle("settings")} onClick={() => setTab("settings")}>鈿欙笍 Configuraci贸n</button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:900, margin:"0 auto", padding:24 }}>
+
+        {tab === "dashboard" && (
+          <div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:24 }}>
+              {[{l:"Visitas",v:metrics.visits,i:"馃憗锔�"},{l:"Empezaron",v:metrics.started,i:"馃摑"},{l:"Presupuestos",v:metrics.generated,i:"馃搵"},{l:"Enviados WA",v:metrics.sentWhatsapp,i:"馃挰"}].map(({l,v,i})=>(
+                <div key={l} style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}>
+                  <p style={{ fontSize:24, marginBottom:4 }}>{i}</p>
+                  <p style={{ fontSize:28, fontWeight:900, color:"#1e293b" }}>{v}</p>

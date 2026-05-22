@@ -9,7 +9,7 @@ const DEF = {
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
-  pickup: 20, handling: 15, domestic: 15,
+  pickup: 20, handling: 15, domestic: 15, domesticSea: 0,
   feeType: "percentage", feePct: 10, feeBase: "fob", feeFixed: 150,
   manualDolar: null,
   legal: "Los valores calculados son estimativos y pueden variar según clasificación arancelaria, documentación comercial, tipo de mercadería, canal de importación, cotización del dólar, costos operativos y normativa vigente al momento de la operación.",
@@ -51,6 +51,7 @@ const calculate = (d, s) => {
   let duty = 0, stat = 0, ivaBase = 0, iva = 0, addVat = 0, gains = 0, ib = 0;
   if (isPersonal) {
     duty = fob <= 400 ? 0 : (fob - 400) * 0.5;
+    iva  = fob * ((+s.vat || 0) / 100);
   } else {
     duty    = cif * (effectiveDutyPct / 100);
     stat    = cif * ((+s.stat || 0) / 100);
@@ -61,9 +62,9 @@ const calculate = (d, s) => {
     ib      = !isAir && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
   }
 
-  const pickup   = +s.pickup   || 0;
-  const handling = +s.handling || 0;
-  const domestic = +s.domestic || 0;
+  const pickup   = +s.pickup || 0;
+  const handling = isAir ? (+s.handling || 0) : 0;
+  const domestic = isAir ? (+s.domestic || 0) : (+s.domesticSea || 0);
   const baseCost = flete + seguro + duty + stat + iva + addVat + gains + ib + pickup + handling + domestic;
 
   // Honorarios: 10% sobre FOB por defecto
@@ -100,6 +101,7 @@ const buildWAMsg = (d, r, rate, s) => {
     "WhatsApp: " + d.whatsapp,
     "Email: " + (d.email || "-"),
     "Producto: " + d.producto,
+    "Pais de origen: " + (d.paisOrigen || "No indicado"),
     "HS Code: " + (d.hsCode || "No indicado"),
     d.aiSuggestion ? "Analisis IA: " + d.aiSuggestion : "",
     "",
@@ -117,7 +119,7 @@ const buildWAMsg = (d, r, rate, s) => {
       ? ("Franquicia personal (50% sobre excedente USD 400): " + USD(r.duty))
       : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.aiDutyRate !== null ? " - via IA" : "") + "): " + USD(r.duty)),
     r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
-    r.isPersonal ? "IVA: No aplica" : ("IVA (" + s.vat + "%): " + USD(r.iva)),
+    r.isPersonal ? ("IVA (" + s.vat + "% s/FOB): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
     ...(!r.isAir && !r.isPersonal
       ? [
           "IVA adicional (" + s.addVat + "%): " + USD(r.addVat),
@@ -128,9 +130,9 @@ const buildWAMsg = (d, r, rate, s) => {
     "",
     "== SERVICIOS LOGISTICOS ==",
     "Pick up / Retiro: " + USD(r.pickup),
-    "Handling: " + USD(r.handling),
+    r.isAir ? ("Handling: " + USD(r.handling)) : "",
     "Envio nacional: " + USD(r.domestic),
-    "Honorarios de gestion: " + USD(r.fees),
+    "Honorarios de Gestion: " + USD(r.fees),
     "",
     "================================",
     "Total envio (sin producto): *" + USD(r.totalLog) + "*",
@@ -184,6 +186,7 @@ const generatePDFHTML = (d, r, dolar, s) => {
   <div class="row"><span>WhatsApp</span><span>${d.whatsapp}</span></div>
   <div class="row"><span>Email</span><span>${d.email || "—"}</span></div>
   <div class="row"><span>Producto</span><span>${d.producto}</span></div>
+  <div class="row"><span>País de origen</span><span>${d.paisOrigen || "—"}</span></div>
   <div class="row"><span>HS Code</span><span>${d.hsCode || "—"}${d.aiDutyRate !== null ? ' <span class="badge">IA</span>' : ""}</span></div>
 </div>
 <div class="sec">
@@ -206,9 +209,9 @@ const generatePDFHTML = (d, r, dolar, s) => {
   <div class="st">Tributos Aduaneros</div>
   ${r.isPersonal ? `
   <div class="row"><span>Franquicia personal activa</span><span class="badge">hasta USD 400 libre</span></div>
-  <div class="row hi"><span>Derecho de importación (50% sobre excedente)</span><span>${USD(r.duty)}</span></div>
+  <div class="row hi"><span>Derecho de importacion (50% sobre excedente)</span><span>${USD(r.duty)}</span></div>
   <div class="row"><span>Tasa estadística</span><span class="na">No aplica</span></div>
-  <div class="row"><span>IVA</span><span class="na">No aplica</span></div>
+  <div class="row"><span>IVA (${s.vat}% sobre FOB)</span><span>${USD(r.iva)}</span></div>
   ` : `
   <div class="row"><span>Derecho de importación (${r.effectiveDutyPct}%${d.aiDutyRate !== null ? " · detectado por IA" : ""})</span><span>${USD(r.duty)}</span></div>
   <div class="row"><span>Tasa estadística (${s.stat}%)</span><span>${USD(r.stat)}</span></div>
@@ -226,9 +229,9 @@ ${!r.isAir ? `
 <div class="sec">
   <div class="st">Servicios Logísticos</div>
   <div class="row"><span>Pick up / Retiro en origen</span><span>${USD(r.pickup)}</span></div>
-  <div class="row"><span>Handling</span><span>${USD(r.handling)}</span></div>
+  ${r.isAir ? `<div class="row"><span>Handling</span><span>${USD(r.handling)}</span></div>` : ""}
   <div class="row"><span>Envío nacional</span><span>${USD(r.domestic)}</span></div>
-  <div class="row hi"><span>Honorarios de gestión</span><span>${USD(r.fees)}</span></div>
+  <div class="row hi"><span>Honorarios de Gestión</span><span>${USD(r.fees)}</span></div>
 </div>
 <div class="tot">
   <div class="r1"><span>Total envío (sin producto):</span><span>${USD(r.totalLog)}${dolar ? ` · ARS ${fmt(r.totalLog * dolar, 0)}` : ""}</span></div>
@@ -369,41 +372,32 @@ const SubTipoSel = ({ value, onChange }) => (
     </div>
     {value === "personal" && (
       <div style={{ marginTop:10, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:12, fontSize:12, color:"#92400e" }}>
-        <strong>🏷️ Franquicia personal:</strong> Sin derechos hasta USD 400. Si supera, se aplica <strong>50% sobre el excedente</strong>. Tasa estadística e IVA <strong>no aplican</strong>.
+        <strong>🏷️ Franquicia personal:</strong> Exento de derechos de importación hasta USD 400. Si supera, se aplica <strong>50% sobre el excedente</strong>. Tasa estadística <strong>no aplica</strong>. IVA 21% sobre valor FOB.
       </div>
     )}
   </div>
 );
 
 /* ── AI ANALYSIS ─────────────────────────────────────────── */
-const analyzeProduct = async (producto) => {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+const callAnalyzeAPI = async (type, value) => {
+  const res = await fetch("/api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 500,
-      messages: [{
-        role: "user",
-        content: `Eres un experto en comercio exterior argentino. Para el producto: "${producto}", determina:
-1. El código HS (arancelario) más probable para importación a Argentina
-2. El porcentaje de derecho de importación aplicable (según nomenclatura arancelaria argentina SIM/VUCE)
-3. Una descripción breve del producto
-
-Responde ÚNICAMENTE en JSON sin markdown ni backticks:
-{"hsCode":"XXXX.XX.XX","dutyRate":XX,"description":"descripción breve","confidence":"alta/media/baja"}`
-      }]
-    })
+    body: JSON.stringify({ type, value }),
   });
+  if (!res.ok) throw new Error("API error");
   const data = await res.json();
   const text = data.content?.[0]?.text || "{}";
   return JSON.parse(text.replace(/```json|```/g, "").trim());
 };
 
+const analyzeProduct = (producto) => callAnalyzeAPI("product", producto);
+const analyzeHsCode  = (hsCode)   => callAnalyzeAPI("hsCode",  hsCode);
+
 /* ── CALCULATOR FORM ─────────────────────────────────────── */
 const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
   const [form, setForm] = useState({
-    nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", fob:"",
+    nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", paisOrigen:"", fob:"",
     tipo:"avion", subTipo:"comercial", peso:"", largo:"", ancho:"", alto:"",
     m3manual:"", files:[], aiDutyRate: null, aiSuggestion: ""
   });
@@ -431,6 +425,25 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         aiSuggestion: `${result.description} — Arancel estimado: ${result.dutyRate}% (confianza: ${result.confidence})`
       }));
     } catch (e) {
+      setAiResult({ error: true });
+    }
+    setAiLoading(false);
+  };
+
+  const handleAnalyzeHsCode = async () => {
+    if (!form.hsCode.trim()) return;
+    setAiLoading(true);
+    try {
+      const result = await analyzeHsCode(form.hsCode);
+      setAiResult(r => ({ ...r, ...result }));
+      setForm(f => ({
+        ...f,
+        aiDutyRate: result.dutyRate ?? f.aiDutyRate,
+        aiSuggestion: result.description
+          ? `${result.description} — Arancel por HS ${f.hsCode}: ${result.dutyRate}% (confianza: ${result.confidence})`
+          : f.aiSuggestion,
+      }));
+    } catch {
       setAiResult({ error: true });
     }
     setAiLoading(false);
@@ -514,8 +527,17 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           )}
 
           <div style={rowS}>
-            <Field label="HS Code / Código arancelario" hint="Se completa automáticamente con la IA">
-              <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} />
+            <Field label="HS Code / Código arancelario" hint="Completá manualmente o detectá con IA">
+              <div style={{ display:"flex", gap:6 }}>
+                <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} style={{ flex:1 }} />
+                <button onClick={handleAnalyzeHsCode} disabled={aiLoading || !form.hsCode.trim()} title="Buscar arancel por HS Code"
+                  style={{ padding:"0 10px", borderRadius:10, border:"none",
+                    background: aiLoading ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
+                    color: aiLoading ? "#94a3b8" : "white", fontWeight:700, fontSize:13,
+                    cursor: aiLoading ? "wait" : "pointer", whiteSpace:"nowrap" }}>
+                  🔍
+                </button>
+              </div>
             </Field>
             <Field label="Valor FOB / Valor productos (USD)" required hint="Valor total según factura del proveedor">
               <div style={{ position:"relative" }}>
@@ -525,6 +547,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.fob && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.fob}</p>}
             </Field>
           </div>
+          <Field label="País de origen" hint="País desde donde se importa el producto">
+            <Inp placeholder="Ej: China, Estados Unidos, Brasil" value={form.paisOrigen} onChange={e => set("paisOrigen", e.target.value)} />
+          </Field>
         </Card>
 
         <Card icon="🌐" title="Tipo de importación" bg="#f0f9ff">
@@ -722,8 +747,8 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
             <div>
               <p style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>Franquicia de envío personal activa</p>
               <p style={{ fontSize:12, color:"#b45309" }}>
-                {r.fob <= 400 ? "FOB ≤ USD 400 — sin derechos de importación." : `Excedente de USD 400: ${USD(r.fob - 400)} → Derecho (50%): ${USD(r.duty)}`}
-                {" "}Tasa estadística, IVA y demás impuestos no aplican.
+                {r.fob <= 400 ? "FOB ≤ USD 400 — Exento de derechos de importación." : `Excedente de USD 400: ${USD(r.fob - 400)}.`}
+                {" "}Tasa estadística y demás impuestos no aplican. IVA 21% sobre FOB aplica.
               </p>
             </div>
           </div>
@@ -769,10 +794,9 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
 
         <Card icon="🏛️" title="Tributos aduaneros">
           {r.isPersonal ? (<>
-            <Row label="Derecho de importación (franquicia personal)" usd={r.duty} dolar={dolar}
-              note={r.fob <= 400 ? "FOB ≤ USD 400 — sin derecho" : `50% sobre USD ${fmt(r.fob - 400)} excedente`} />
-            <Row label="Tasa estadística" na />
-            <Row label={`IVA (${s.vat}%)`} na />
+            <Row label="Derecho de importacion (50%)" usd={r.duty} dolar={dolar}
+              note={r.fob <= 400 ? "FOB ≤ USD 400 — Exento" : `50% sobre USD ${fmt(r.fob - 400)} excedente`} />
+            <Row label={`IVA (${s.vat}% sobre FOB)`} usd={r.iva} dolar={dolar} />
           </>) : (<>
             <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.aiDutyRate !== null ? " · IA" : ""})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
@@ -797,9 +821,9 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
 
         <Card icon="🚚" title="Servicios logísticos">
           <Row label="Pick up / Retiro en origen" usd={r.pickup} dolar={dolar} />
-          <Row label="Handling" usd={r.handling} dolar={dolar} />
+          {r.isAir && <Row label="Handling" usd={r.handling} dolar={dolar} />}
           <Row label="Envío nacional" usd={r.domestic} dolar={dolar} />
-          <Row label={`Honorarios de gestión (${s.feeType === "fixed" ? "fijo" : `${s.feePct}% s/${s.feeBase === "fob" ? "FOB" : "costos"}`})`} usd={r.fees} dolar={dolar} hi />
+          <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
 
         {/* Totales */}
@@ -914,14 +938,50 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
       </div>
       {open && (
         <div style={{ borderTop:"1px solid #f1f5f9", padding:16 }}>
+          {/* Datos del cliente */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14, fontSize:13 }}>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>WhatsApp</p>
               <a href={`https://wa.me/${(q.whatsapp||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{ fontWeight:700, color:"#16a34a" }}>{q.whatsapp}</a>
             </div>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>Email</p><p style={{ fontWeight:700 }}>{q.email || "—"}</p></div>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>HS Code</p><p style={{ fontWeight:700 }}>{q.hsCode || "—"}</p></div>
-            <div><p style={{ fontSize:11, color:"#94a3b8" }}>Archivos</p><p style={{ fontSize:12 }}>{q.formData?.files?.length ? q.formData.files.join(", ") : "Ninguno"}</p></div>
+            <div><p style={{ fontSize:11, color:"#94a3b8" }}>País de origen</p><p style={{ fontWeight:700 }}>{q.formData?.paisOrigen || "—"}</p></div>
+            <div style={{ gridColumn:"1/-1" }}><p style={{ fontSize:11, color:"#94a3b8" }}>Archivos</p><p style={{ fontSize:12 }}>{q.formData?.files?.length ? q.formData.files.join(", ") : "Ninguno"}</p></div>
           </div>
+
+          {/* Detalle de la cotización */}
+          {r && (
+            <div style={{ background:"#f8fafc", borderRadius:12, padding:12, marginBottom:14, border:"1px solid #e2e8f0" }}>
+              <p style={{ fontWeight:700, color:"#334155", marginBottom:10, fontSize:11, textTransform:"uppercase", letterSpacing:.5 }}>Detalle de la cotización</p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:"4px 12px", fontSize:12 }}>
+                <span style={{ color:"#64748b" }}>FOB / Valor productos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.fob)}</span>
+                <span style={{ color:"#64748b" }}>Flete internacional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.flete)}</span>
+                <span style={{ color:"#64748b" }}>Seguro</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.seguro)}</span>
+                <span style={{ color:"#0369a1", fontWeight:700 }}>CIF / Valor en aduana</span><span style={{ fontWeight:700, color:"#0369a1", textAlign:"right" }}>{USD(r.cif)}</span>
+                <span style={{ color:"#64748b" }}>Derecho importación</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.duty)}</span>
+                {!r.isPersonal && <><span style={{ color:"#64748b" }}>Tasa estadística</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.stat)}</span></>}
+                <span style={{ color:"#64748b" }}>IVA</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.iva)}</span>
+                {!r.isAir && !r.isPersonal && <>
+                  <span style={{ color:"#64748b" }}>IVA adicional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.addVat)}</span>
+                  <span style={{ color:"#64748b" }}>Ganancias</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.gains)}</span>
+                  <span style={{ color:"#64748b" }}>Ingresos Brutos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.ib)}</span>
+                </>}
+                <span style={{ color:"#64748b" }}>Pick up</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.pickup)}</span>
+                {r.isAir && <><span style={{ color:"#64748b" }}>Handling</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.handling)}</span></>}
+                <span style={{ color:"#64748b" }}>Envío nacional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.domestic)}</span>
+                <span style={{ color:"#64748b" }}>Honorarios de Gestión</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.fees)}</span>
+                <span style={{ color:"#475569", fontWeight:700, borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>Total envío</span><span style={{ fontWeight:700, color:"#0369a1", textAlign:"right", borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>{USD(r.totalLog)}</span>
+                <span style={{ color:"#0d2347", fontWeight:900, fontSize:13 }}>TOTAL GENERAL</span><span style={{ fontWeight:900, color:"#0d2347", textAlign:"right", fontSize:13 }}>{USD(r.totalGen)}</span>
+              </div>
+              {q.formData?.aiSuggestion && (
+                <p style={{ marginTop:8, fontSize:11, color:"#166534", background:"#f0fdf4", padding:"6px 10px", borderRadius:8, border:"1px solid #86efac" }}>
+                  🤖 {q.formData.aiSuggestion}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Estado */}
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
             <span style={{ fontSize:12, color:"#64748b", fontWeight:700 }}>Estado:</span>
             {Object.entries(STATUS_MAP).map(([k, v]) => (
@@ -1090,7 +1150,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             </Card>
             <Card icon="🚚" title="Servicios logísticos">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                <SF label="Pick up (USD)" k="pickup"/><SF label="Handling (USD)" k="handling"/><SF label="Envío nacional (USD)" k="domestic"/>
+                <SF label="Pick up (USD)" k="pickup"/><SF label="Handling -avión- (USD)" k="handling"/><SF label="Envío nacional -avión- (USD)" k="domestic"/><SF label="Envío nacional -barco- (USD)" k="domesticSea"/>
               </div>
               <Field label="Tipo de honorarios">
                 <div style={{ display:"flex", gap:12 }}>

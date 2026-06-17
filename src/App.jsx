@@ -9,7 +9,7 @@ const DEF = {
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
-  pickup: 20, handling: 15, domestic: 15, domesticSea: 0,
+  pickup: 20, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
   feeType: "percentage", feePct: 8, feePctSea: 5, feeBase: "fob", feeFixed: 150, feeFixedSea: 150,
   manualDolar: null,
   legal: "Los valores calculados son estimativos y pueden variar según clasificación arancelaria, documentación comercial, tipo de mercadería, canal de importación, cotización del dólar, costos operativos y normativa vigente al momento de la operación.",
@@ -124,9 +124,12 @@ const calculate = (d, s) => {
     ib      = !isAir && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
   }
 
-  const pickup   = +s.pickup || 0;
-  const handling = isAir ? (+s.handling || 0) : 0;
-  const domestic = isAir ? (+s.domestic || 0) : (+s.domesticSea || 0);
+  const pickup     = +s.pickup || 0;
+  // Handling (solo avión): se cobra el valor configurado si el peso facturable
+  // es menor al umbral (handlingMaxKg); si lo iguala o supera, queda en 0.
+  const handlingMax = (s.handlingMaxKg != null && s.handlingMaxKg !== "" ? +s.handlingMaxKg : 3);
+  const handling   = isAir ? (pFact < handlingMax ? (+s.handling || 0) : 0) : 0;
+  const domestic   = isAir ? (+s.domestic || 0) : (+s.domesticSea || 0);
   const baseCost = flete + seguro + duty + stat + iva + addVat + gains + ib + pickup + handling + domestic;
 
   // Honorarios: % o monto fijo, diferenciado por tipo de envío (avión / barco)
@@ -1269,6 +1272,11 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             <Card icon="🚚" title="Servicios logísticos">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
                 <SF label="Pick up (USD)" k="pickup"/><SF label="Handling -avión- (USD)" k="handling"/><SF label="Envío nacional -avión- (USD)" k="domestic"/><SF label="Envío nacional -barco- (USD)" k="domesticSea"/>
+              </div>
+              <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
+                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>✈️ Regla del Handling (avión)</p>
+                <SF label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
+                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera este valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
               <Field label="Tipo de honorarios">
                 <div style={{ display:"flex", gap:12 }}>

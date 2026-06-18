@@ -450,9 +450,11 @@ const SubTipoSel = ({ value, onChange }) => (
 
 /* ── AI ANALYSIS ─────────────────────────────────────────── */
 const callAnalyzeAPI = async (type, value) => {
-  const res = await fetch("/api/analyze", {
+  // cache-buster + no-store para evitar respuestas arancelarias cacheadas
+  const res = await fetch(`/api/analyze?t=${encodeURIComponent(value)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    cache: "no-store",
     body: JSON.stringify({ type, value }),
   });
   if (!res.ok) throw new Error("API error");

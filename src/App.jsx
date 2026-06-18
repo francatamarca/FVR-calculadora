@@ -5,7 +5,7 @@ const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493885223299";
 
 const DEF = {
-  airRate: 25, seaRate: 600, seaMin: 1,
+  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
@@ -91,8 +91,11 @@ const calculate = (d, s) => {
   if (isAir) {
     pVol  = (L * W * H) / 5000;
     pFact = Math.max(pVol, peso);
-    // Tarifa aérea según país de origen: USA = 20 USD/kg ; China, España u otro = 23 USD/kg
-    airRate = d.origenSel === "Estados Unidos (USA)" ? 20 : 23;
+    // Tarifa aérea según país de origen (configurable en admin).
+    // USA y España tienen su propia tarifa; China y cualquier otro país usan la de China.
+    airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
+            : d.origenSel === "España"               ? (+s.airRateEspana || 0)
+            : (+s.airRateChina || 0);
     flete = pFact * airRate;
   } else {
     m3     = +d.m3manual || 0;
@@ -656,7 +659,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.fob && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.fob}</p>}
             </Field>
           </div>
-          <Field label="País de origen" hint="China o España: USD 23/kg aéreo · Estados Unidos: USD 20/kg · otro país: USD 23/kg.">
+          <Field label="País de origen">
             <select value={form.origenSel} onChange={e => handleOrigen(e.target.value)} style={{ ...inputStyle, cursor:"pointer" }}>
               <option value="">Seleccionar país…</option>
               <option value="China">China</option>
@@ -1246,7 +1249,14 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
 
         {tab === "settings" && (
           <div>
-            <Card icon="✈️" title="Flete aéreo"><SF label="Tarifa aérea (USD / kg)" k="airRate"/></Card>
+            <Card icon="✈️" title="Flete aéreo (USD / kg) por país de origen">
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+                <SF label="🇺🇸 Estados Unidos" k="airRateUSA"/>
+                <SF label="🇨🇳 China" k="airRateChina"/>
+                <SF label="🇪🇸 España" k="airRateEspana"/>
+              </div>
+              <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa es fija por kg (no varía con el peso). Cualquier otro país de origen usa la tarifa de China.</p>
+            </Card>
             <Card icon="🚢" title="Flete marítimo">
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                 <SF label="Tarifa marítima (USD / m³)" k="seaRate"/><SF label="Mínimo facturable (m³)" k="seaMin"/>

@@ -153,8 +153,8 @@ const NCM_RATES = {
   // Ch.92 Musical instruments
   "9201":16,"9202":16,"9203":16,"9204":16,"9205":16,
   "9206":16,"9207":16,"9208":16,"9209":16,
-  // Ch.93 Arms
-  "9301":0,"9302":0,"9303":0,"9304":0,"9305":0,"9306":0,"9307":0,
+  // Ch.93 Arms — AEC extrazona 20% (el 0% es DII intrazona Mercosur, no aplica a China/USA)
+  "9301":20,"9302":20,"9303":20,"9304":20,"9305":20,"9306":20,"9307":20,
   // Ch.94 Furniture
   "9401":18,"9402":18,"9403":18,"9404":18,"9405":18,"9406":18,
   // Ch.95 Toys & games
@@ -334,7 +334,7 @@ const CHAPTER_RATES = {
   "68":10,"69":14,"70":14,"71":14,"72":8,"73":10,"74":8,"75":4,"76":8,
   "77":0,"78":4,"79":4,"80":4,"81":4,"82":12,"83":12,
   "84":8,"85":12,"86":6,"87":20,"88":8,"89":6,
-  "90":8,"91":18,"92":16,"93":0,"94":18,"95":20,"96":16,"97":0,
+  "90":8,"91":18,"92":16,"93":20,"94":18,"95":20,"96":16,"97":0,
 };
 
 // ── Lookup helpers ────────────────────────────────────────────────────────
@@ -403,7 +403,7 @@ export default async function handler(req, res) {
     if (type === "hsCode") {
       prompt = `Eres un experto en aranceles aduaneros de Argentina con conocimiento del Nomenclador Común del MERCOSUR (NCM).
 Para el código HS/NCM: "${value}", determina:
-1. El derecho de importación ad valorem aplicable para importación a Argentina según el AEC del MERCOSUR vigente
+1. El derecho de importación que paga una importación EXTRAZONA (origen China, Estados Unidos u otro país NO MERCOSUR). Es decir, el Arancel Externo Común (AEC) / DIE extrazona vigente en Argentina. NUNCA devuelvas el Derecho de Importación Intrazona (DII Mercosur), que suele ser 0% y NO aplica a China ni USA.
 2. Una descripción del tipo de mercadería que corresponde a ese código
 
 Los aranceles más frecuentes en Argentina son: 0%, 2%, 4%, 6%, 8%, 10%, 12%, 14%, 16%, 18%, 20%, 22%, 28%, 35%.
@@ -414,10 +414,10 @@ Responde ÚNICAMENTE en JSON sin markdown ni backticks:
       prompt = `Eres un experto en comercio exterior argentino con conocimiento actualizado del Nomenclador Común del MERCOSUR (NCM) y el Sistema Informático MALVINA (SIM/VUCE) de Argentina.
 Para el producto: "${value}", determina:
 1. El código HS/NCM más probable para importación a Argentina (formato: XXXX.XX.XX)
-2. El derecho de importación ad valorem aplicable según el AEC del MERCOSUR vigente en Argentina
+2. El derecho de importación que paga una importación EXTRAZONA (origen China, Estados Unidos u otro país NO MERCOSUR): el Arancel Externo Común (AEC) / DIE extrazona vigente. NUNCA devuelvas el Derecho de Importación Intrazona (DII Mercosur), que suele ser 0% y NO aplica a China ni USA.
 3. Una descripción breve y precisa del producto
 
-Considera que Argentina aplica el Arancel Externo Común del MERCOSUR. Los aranceles más comunes son: 0%, 2%, 4%, 6%, 8%, 10%, 12%, 14%, 16%, 18%, 20%, 22%, 28%, 35%.
+Los aranceles más comunes son: 0%, 2%, 4%, 6%, 8%, 10%, 12%, 14%, 16%, 18%, 20%, 22%, 28%, 35%.
 
 Responde ÚNICAMENTE en JSON sin markdown ni backticks:
 {"hsCode":"XXXX.XX.XX","dutyRate":XX,"description":"descripción breve","confidence":"alta/media/baja"}`;

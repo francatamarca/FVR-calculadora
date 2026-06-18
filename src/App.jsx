@@ -21,55 +21,127 @@ const DEF = {
    por código en VUCE (vuce.gob.ar) o con despachante.
    Si el producto no está en la lista, se deja en blanco y se usa IA / HS Code. */
 const CATEGORIES = [
-  { label: "Teléfonos celulares", rate: 0 },
+  // Electrónica, informática y telecom (mayoría 0% por régimen BIT)
+  { label: "Teléfonos celulares / smartphones", rate: 0 },
   { label: "Tablets", rate: 0 },
-  { label: "Computadoras portátiles", rate: 0 },
+  { label: "Computadoras portátiles / notebooks", rate: 0 },
   { label: "Computadoras de escritorio", rate: 0 },
-  { label: "Smartwatch", rate: 0 },
+  { label: "Monitores para PC", rate: 16 },
+  { label: "Teclados", rate: 0 },
+  { label: "Mouse", rate: 0 },
+  { label: "Pendrives y discos externos", rate: 0 },
+  { label: "Componentes de PC (placa, GPU, CPU)", rate: 0 },
+  { label: "Impresoras y escáneres", rate: 14 },
+  { label: "Routers y módems", rate: 0 },
+  { label: "Smartwatch / relojes inteligentes", rate: 0 },
   { label: "Consolas de videojuegos", rate: 20 },
-  { label: "Televisores", rate: 16 },
+  { label: "Videojuegos", rate: 20 },
   { label: "Cámaras fotográficas", rate: 18 },
-  { label: "Auriculares", rate: 20 },
+  { label: "Cámaras de video / GoPro", rate: 18 },
   { label: "Drones", rate: 0 },
+  { label: "Proyectores", rate: 16 },
+  { label: "Powerbank / baterías portátiles", rate: 14 },
+  { label: "Cargadores y adaptadores", rate: 14 },
+  { label: "Cables (USB, HDMI)", rate: 12 },
+  { label: "Auriculares", rate: 20 },
+  { label: "Parlantes y altavoces", rate: 20 },
+  { label: "Micrófonos", rate: 20 },
+  { label: "Televisores", rate: 16 },
+  // Electrodomésticos (20%)
   { label: "Heladeras y freezers", rate: 20 },
   { label: "Lavarropas", rate: 20 },
   { label: "Microondas", rate: 20 },
   { label: "Aspiradoras", rate: 20 },
   { label: "Licuadoras y procesadoras", rate: 20 },
   { label: "Planchas", rate: 20 },
+  { label: "Ventiladores", rate: 20 },
+  { label: "Aire acondicionado", rate: 20 },
+  { label: "Secadores de pelo", rate: 20 },
+  { label: "Afeitadoras y depiladoras", rate: 20 },
+  { label: "Cafeteras", rate: 20 },
+  { label: "Tostadoras y sandwicheras", rate: 20 },
+  // Ropa y calzado (20% — Dec. 236/2025)
   { label: "Ropa casual", rate: 20 },
   { label: "Ropa deportiva", rate: 20 },
   { label: "Ropa interior", rate: 20 },
-  { label: "Calzado deportivo", rate: 20 },
+  { label: "Ropa de bebé", rate: 20 },
+  { label: "Medias", rate: 20 },
+  { label: "Guantes", rate: 20 },
+  { label: "Bufandas y pañuelos", rate: 20 },
+  { label: "Corbatas", rate: 20 },
+  { label: "Trajes de baño y mallas", rate: 20 },
+  { label: "Calzado deportivo / zapatillas", rate: 20 },
   { label: "Calzado casual", rate: 20 },
+  { label: "Botas", rate: 20 },
+  { label: "Sandalias y ojotas", rate: 20 },
   { label: "Sombreros y gorras", rate: 20 },
+  // Textil hogar
+  { label: "Telas y tejidos", rate: 18 },
+  { label: "Ropa de cama y sábanas", rate: 20 },
+  { label: "Toallas", rate: 20 },
+  { label: "Cortinas", rate: 20 },
+  { label: "Alfombras", rate: 20 },
+  { label: "Mantas y frazadas", rate: 20 },
+  // Marroquinería y accesorios (18%)
   { label: "Carteras y bolsos", rate: 18 },
+  { label: "Mochilas", rate: 18 },
+  { label: "Billeteras", rate: 18 },
   { label: "Cinturones", rate: 18 },
   { label: "Maletas y equipaje", rate: 18 },
+  { label: "Relojes de pulsera", rate: 20 },
+  { label: "Gafas de sol", rate: 18 },
+  { label: "Anteojos de vista", rate: 18 },
+  { label: "Joyas (oro y plata)", rate: 18 },
+  { label: "Bijouterie y fantasía", rate: 18 },
+  // Cosmética y perfumería (18%)
+  { label: "Perfumes", rate: 18 },
+  { label: "Maquillaje y cosméticos", rate: 18 },
+  { label: "Cremas faciales y corporales", rate: 18 },
+  { label: "Productos para el cabello / shampoo", rate: 18 },
+  { label: "Desodorantes", rate: 18 },
+  // Hogar y muebles (18%)
   { label: "Muebles", rate: 18 },
-  { label: "Luminarias", rate: 18 },
-  { label: "Alfombras", rate: 20 },
-  { label: "Cortinas", rate: 20 },
+  { label: "Sillas y sillones", rate: 18 },
+  { label: "Mesas y escritorios", rate: 18 },
+  { label: "Colchones", rate: 18 },
+  { label: "Lámparas y luminarias", rate: 18 },
   { label: "Vajilla", rate: 18 },
   { label: "Utensilios de cocina", rate: 18 },
+  { label: "Ollas y sartenes", rate: 18 },
+  { label: "Decoración del hogar", rate: 18 },
+  // Deportes y aire libre
   { label: "Bicicletas", rate: 20 },
-  { label: "Equipamiento deportivo", rate: 18 },
+  { label: "Equipamiento de gimnasio", rate: 20 },
+  { label: "Pelotas y artículos deportivos", rate: 20 },
+  { label: "Camping y carpas", rate: 20 },
+  // Juguetes (20%)
   { label: "Juguetes", rate: 20 },
-  { label: "Instrumentos musicales", rate: 16 },
-  { label: "Cosméticos", rate: 18 },
-  { label: "Perfumes", rate: 18 },
-  { label: "Productos para el cabello", rate: 18 },
+  { label: "Muñecas y peluches", rate: 20 },
+  { label: "Juegos de mesa y puzzles", rate: 20 },
+  // Herramientas (12%)
   { label: "Herramientas manuales", rate: 12 },
   { label: "Herramientas eléctricas", rate: 12 },
-  { label: "Autopartes", rate: 18 },
-  { label: "Joyas y bijouterie", rate: 18 },
-  { label: "Relojes", rate: 20 },
-  { label: "Gafas de sol", rate: 18 },
-  { label: "Material de oficina", rate: 18 },
-  { label: "Cuadernos y agendas", rate: 16 },
-  { label: "Suplementos alimentarios", rate: 20 },
+  // Instrumentos musicales (16%)
+  { label: "Guitarras e instrumentos de cuerda", rate: 16 },
+  { label: "Teclados musicales y sintetizadores", rate: 16 },
+  // Salud
+  { label: "Suplementos y proteínas", rate: 20 },
+  { label: "Material médico", rate: 6 },
   { label: "Productos ortopédicos", rate: 0 },
+  { label: "Lentes de contacto", rate: 10 },
+  // Bebés
+  { label: "Cochecitos y sillas de bebé", rate: 20 },
+  // Papelería
   { label: "Libros", rate: 0 },
+  { label: "Cuadernos y agendas", rate: 16 },
+  { label: "Material de oficina", rate: 18 },
+  // Mascotas
+  { label: "Alimento para mascotas", rate: 10 },
+  { label: "Accesorios para mascotas", rate: 18 },
+  // Automotor y motos
+  { label: "Autopartes y accesorios", rate: 18 },
+  { label: "Cascos y accesorios de moto", rate: 18 },
+  { label: "Neumáticos", rate: 14 },
 ];
 
 const fmt  = (v, d = 2) => Number(v || 0).toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -479,6 +551,8 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const [touched, setTouched]     = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult]   = useState(null);
+  const [catQuery, setCatQuery]   = useState("");
+  const [catOpen, setCatOpen]     = useState(false);
 
   const set = (k, v) => {
     if (!touched) { onTrackStarted(); setTouched(true); }
@@ -610,14 +684,36 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             {errors.producto && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.producto}</p>}
           </Field>
 
-          <Field label="Categoría del producto" hint="% de derecho referencial (NCM/AEC MERCOSUR). Si el producto no está, dejala en blanco y usá '🤖 Analizar IA' o el HS Code. Confirmá el arancel exacto en VUCE o con tu despachante.">
-            <select value={form.categoria} onChange={e => handleCategoria(e.target.value)}
-              style={{ ...inputStyle, cursor:"pointer" }}>
-              <option value="">Seleccionar… (o detectar con IA / HS Code)</option>
-              {CATEGORIES.map(c => (
-                <option key={c.label} value={c.label}>{c.label} — {c.rate}%</option>
-              ))}
-            </select>
+          <Field label="Categoría del producto" hint="Escribí tu producto y elegí la categoría de la lista. Si no está, usá '🤖 Analizar IA' o el HS Code. Arancel referencial (AEC extrazona); confirmá el exacto en VUCE o con tu despachante.">
+            <div style={{ position:"relative" }}>
+              <Inp placeholder="Buscá: zapatilla, celular, perfume, heladera…"
+                value={catQuery}
+                onChange={e => { setCatQuery(e.target.value); setCatOpen(true); if (!e.target.value.trim()) handleCategoria(""); }}
+                onFocus={() => setCatOpen(true)}
+                onBlur={() => setTimeout(() => setCatOpen(false), 150)} />
+              {catOpen && (() => {
+                const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+                const q = norm(catQuery.trim());
+                const matches = CATEGORIES.filter(c => !q || norm(c.label).includes(q)).slice(0, 10);
+                if (!matches.length) return (
+                  <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:20, background:"white", border:"1px solid #e2e8f0", borderRadius:12, marginTop:4, padding:"12px 14px", fontSize:12, color:"#94a3b8", boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
+                    No está en la lista — usá <strong>🤖 Analizar IA</strong> o cargá el HS Code.
+                  </div>
+                );
+                return (
+                  <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:20, background:"white", border:"1px solid #e2e8f0", borderRadius:12, marginTop:4, maxHeight:300, overflowY:"auto", boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
+                    {matches.map(c => (
+                      <button key={c.label} type="button"
+                        onMouseDown={() => { handleCategoria(c.label); setCatQuery(c.label); setCatOpen(false); }}
+                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", textAlign:"left", padding:"10px 14px", border:"none", borderBottom:"1px solid #f1f5f9", background:"white", cursor:"pointer", fontSize:13, color:"#334155" }}>
+                        <span>{c.label}</span>
+                        <span style={{ fontWeight:700, color:"#0369a1", fontSize:12, flexShrink:0, marginLeft:10 }}>{c.rate}%</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
             {form.categoria && (
               <p style={{ fontSize:12, color:"#15803d", fontWeight:700, marginTop:6 }}>
                 ✅ {form.categoria}: derecho de importación {CATEGORIES.find(c => c.label === form.categoria)?.rate}%

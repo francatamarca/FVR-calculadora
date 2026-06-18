@@ -1360,20 +1360,29 @@ export default function App() {
     const cfg = ls("fvr_cfg", DEF);
     if (cfg.manualDolar) { setDolar(cfg.manualDolar); return; }
     setDolarLoad(true);
+    // 1) CriptoYa — dólar oficial Banco Nación venta (mismo valor que DolarHoy)
+    try {
+      const res = await fetch("https://criptoya.com/api/dolar");
+      const d   = await res.json();
+      const venta = d?.oficial?.ask ?? d?.oficial?.price;
+      if (venta) { setDolar(venta); setDolarErr(false); setDolarLoad(false); return; }
+      throw new Error();
+    } catch {}
+    // 2) dolarapi (respaldo)
     try {
       const res = await fetch("https://dolarapi.com/v1/dolares/oficial");
       const d   = await res.json();
       if (d.venta) { setDolar(d.venta); setDolarErr(false); setDolarLoad(false); return; }
       throw new Error();
+    } catch {}
+    // 3) bluelytics (respaldo)
+    try {
+      const res2 = await fetch("https://api.bluelytics.com.ar/v2/latest");
+      const d2   = await res2.json();
+      if (d2?.oficial?.value_sell) { setDolar(d2.oficial.value_sell); setDolarErr(false); setDolarLoad(false); return; }
+      throw new Error();
     } catch {
-      try {
-        const res2 = await fetch("https://api.bluelytics.com.ar/v2/latest");
-        const d2   = await res2.json();
-        if (d2?.oficial?.value_sell) { setDolar(d2.oficial.value_sell); setDolarErr(false); setDolarLoad(false); return; }
-        throw new Error();
-      } catch {
-        setDolarErr(true); setDolar(1420);
-      }
+      setDolarErr(true); setDolar(1450);
     }
     setDolarLoad(false);
   };

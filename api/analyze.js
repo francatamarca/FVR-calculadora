@@ -206,6 +206,8 @@ const CHAPTER_DESC = {
 
 // ── Product keyword → rate mapping ───────────────────────────────────────
 const KEYWORD_RULES = [
+  // Airsoft / armas de aire comprimido y réplicas (cap. 93 — AEC extrazona 20%)
+  { k:["airsoft","air soft","replica airsoft","replica de arma","pistola airsoft","pistola de airsoft","rifle airsoft","rifle de airsoft","marcadora","paintball","gotcha","arma de aire comprimido","pistola de aire comprimido","rifle de aire comprimido","rifle de aire","pistola de aire","arma de co2","co2 pistola","balin","balines","postas","municion airsoft","bbs airsoft","bolitas airsoft"], hs:"9304.00.90", rate:20, desc:"Arma de aire comprimido / airsoft (réplica)" },
   // Computing (0%)
   { k:["laptop","notebook","computadora portatil","macbook","ultrabook"], hs:"8471.30.19", rate:0, desc:"Computadora portátil" },
   { k:["computadora de escritorio","desktop","pc escritorio","tower pc"], hs:"8471.41.90", rate:0, desc:"Computadora de escritorio" },

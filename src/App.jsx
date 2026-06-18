@@ -21,6 +21,10 @@ const DEF = {
    por código en VUCE (vuce.gob.ar) o con despachante.
    Si el producto no está en la lista, se deja en blanco y se usa IA / HS Code. */
 const CATEGORIES = [
+  // Airsoft y aire comprimido (cap. 93 — 20%)
+  { label: "Airsoft / réplicas de armas", rate: 20 },
+  { label: "Armas de aire comprimido (rifles, pistolas)", rate: 20 },
+  { label: "Balines y munición airsoft", rate: 20 },
   // Electrónica, informática y telecom (mayoría 0% por régimen BIT)
   { label: "Teléfonos celulares / smartphones", rate: 0 },
   { label: "Tablets", rate: 0 },
@@ -694,7 +698,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {catOpen && (() => {
                 const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
                 const q = norm(catQuery.trim());
-                const matches = CATEGORIES.filter(c => !q || norm(c.label).includes(q)).slice(0, 10);
+                const matches = CATEGORIES.filter(c => !q || norm(c.label).includes(q));
                 if (!matches.length) return (
                   <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:20, background:"white", border:"1px solid #e2e8f0", borderRadius:12, marginTop:4, padding:"12px 14px", fontSize:12, color:"#94a3b8", boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
                     No está en la lista — usá <strong>🤖 Analizar IA</strong> o cargá el HS Code.

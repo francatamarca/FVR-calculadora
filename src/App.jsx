@@ -10,6 +10,7 @@ const DEF = {
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
   pickup: 20, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
+  handlingSea: 15, handlingMaxKgSea: 3, domesticSeaKg: 0,
   feeType: "percentage", feePct: 8, feePctSea: 5, feeBase: "fob", feeFixed: 150, feeFixedSea: 150,
   manualDolar: null,
   legal: "Los valores calculados son estimativos y pueden variar según clasificación arancelaria, documentación comercial, tipo de mercadería, canal de importación, cotización del dólar, costos operativos y normativa vigente al momento de la operación.",
@@ -214,11 +215,18 @@ const calculate = (d, s) => {
   }
 
   const pickup     = +s.pickup || 0;
-  // Handling (solo avión): se cobra el valor configurado si el peso facturable
-  // es menor al umbral (handlingMaxKg); si lo iguala o supera, queda en 0.
-  const handlingMax = (s.handlingMaxKg != null && s.handlingMaxKg !== "" ? +s.handlingMaxKg : 3);
-  const handling   = isAir ? (pFact < handlingMax ? (+s.handling || 0) : 0) : 0;
-  const domestic   = isAir ? (+s.domestic || 0) : (+s.domesticSea || 0);
+  // Handling con regla de peso (avión y marítimo por kilo): se cobra el valor
+  // configurado solo si el peso facturable es menor al umbral; si no, queda en 0.
+  // Barco por m³ no tiene handling.
+  const hasHandling = isAir || seaKg;
+  const handlingMaxA = (s.handlingMaxKg    != null && s.handlingMaxKg    !== "" ? +s.handlingMaxKg    : 3);
+  const handlingMaxK = (s.handlingMaxKgSea != null && s.handlingMaxKgSea !== "" ? +s.handlingMaxKgSea : 3);
+  const handling   = isAir ? (pFact < handlingMaxA ? (+s.handling || 0) : 0)
+                   : seaKg ? (pFact < handlingMaxK ? (+s.handlingSea || 0) : 0)
+                   : 0;
+  const domestic   = isAir ? (+s.domestic || 0)
+                   : seaKg ? (+s.domesticSeaKg || 0)
+                   : (+s.domesticSea || 0);
   const baseCost = flete + seguro + duty + stat + iva + addVat + gains + ib + pickup + handling + domestic;
 
   // Honorarios: % o monto fijo, diferenciado por tipo de envío (avión / barco)
@@ -237,7 +245,7 @@ const calculate = (d, s) => {
   const totalGen = fob + totalLog;
 
   return {
-    fob, isAir, seaKg, seaM3, byWeight, internalTaxes, isPersonal,
+    fob, isAir, seaKg, seaM3, byWeight, internalTaxes, isPersonal, hasHandling,
     peso, pVol, pFact, m3, m3Fact, airRate,
     flete, seguro, cif, duty, stat, ivaBase, iva,
     addVat, gains, ib, pickup, handling, domestic, fees,
@@ -267,7 +275,7 @@ const buildWAMsg = (d, r, rate, s) => {
     r.isAir
       ? ("Peso real: " + r.peso + " kg | Volumetrico: " + fmt(r.pVol) + " kg | Facturable: " + fmt(r.pFact) + " kg")
       : r.seaKg
-        ? ("Peso real: " + r.peso + " kg (se cobra por kilo real)")
+        ? ("Peso real: " + r.peso + " kg")
         : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
     "",
     "== COSTOS DETALLADOS ==",
@@ -289,7 +297,7 @@ const buildWAMsg = (d, r, rate, s) => {
     "",
     "== SERVICIOS LOGISTICOS ==",
     "Pick up / Retiro: " + USD(r.pickup),
-    r.isAir ? ("Handling: " + USD(r.handling)) : "",
+    r.hasHandling ? ("Handling: " + USD(r.handling)) : "",
     "Envio nacional: " + USD(r.domestic),
     "Honorarios de Gestion: " + USD(r.fees),
     "",
@@ -405,7 +413,7 @@ const generatePDF = async (d, r, dolar, s) => {
       ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
       [`Tarifa aérea (USD ${r.airRate}/kg)`, USD(r.flete)]);
   } else if (r.seaKg) {
-    flete.push(["Peso real (se cobra por kilo real)", `${r.peso} kg`],
+    flete.push(["Peso real", `${r.peso} kg`],
       [`Tarifa marítima (USD ${r.airRate}/kg)`, USD(r.flete)]);
   } else {
     flete.push(["Volumen ingresado", `${fmt(r.m3, 3)} m³`],
@@ -437,7 +445,7 @@ const generatePDF = async (d, r, dolar, s) => {
   }
 
   const serv = [["Pick up / Retiro en origen", USD(r.pickup)]];
-  if (r.isAir) serv.push(["Handling", USD(r.handling)]);
+  if (r.hasHandling) serv.push(["Handling", USD(r.handling)]);
   serv.push(["Envío nacional", USD(r.domestic)], ["Honorarios de Gestión", USD(r.fees)]);
   section("SERVICIOS LOGÍSTICOS", serv);
 
@@ -634,7 +642,7 @@ const SeaModeSel = ({ value, onChange }) => (
     </div>
     {value === "kg" && (
       <div style={{ marginTop:10, background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:12, fontSize:12, color:"#0369a1" }}>
-        <strong>⚖️ Marítimo por kilo:</strong> se cobra por peso facturable (igual que el aéreo) y se calcula con los <strong>mismos impuestos que un envío aéreo comercial</strong>. Solo cambia la tarifa por kilo.
+        <strong>⚖️ Marítimo por kilo:</strong> se cobra por el <strong>peso real</strong> (no se usan medidas ni peso volumétrico).
       </div>
     )}
   </div>
@@ -940,11 +948,6 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.medidas && <p style={{ color:"#ef4444", fontSize:11, marginBottom:12 }}>{errors.medidas}</p>}
             </>
           )}
-          {seaKg && (
-            <div style={{ background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:12, marginBottom:16, fontSize:12, color:"#0369a1" }}>
-              <strong>⚖️ Marítimo por kilo:</strong> se cobra por el <strong>peso real</strong> (no se usan medidas ni peso volumétrico).
-            </div>
-          )}
           {seaM3 && (
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Ingresá el <strong>volumen total en m³</strong> del embarque</p>
@@ -1146,7 +1149,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
           {r.byWeight ? (<>
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background: r.seaKg ? "#eff6ff" : "transparent" }}>
-              <span style={{ color: r.seaKg ? "#0369a1" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>Peso real {r.seaKg ? "(se cobra por kilo real)" : "total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0369a1" : "#1e293b" }}>{fmt(r.peso)} kg</span>
+              <span style={{ color: r.seaKg ? "#0369a1" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>{r.seaKg ? "Peso real" : "Peso real total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0369a1" : "#1e293b" }}>{fmt(r.peso)} kg</span>
             </div>
             {r.isAir && (<>
               <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
@@ -1206,7 +1209,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
 
         <Card icon="🚚" title="Servicios logísticos">
           <Row label="Pick up / Retiro en origen" usd={r.pickup} dolar={dolar} />
-          {r.isAir && <Row label="Handling" usd={r.handling} dolar={dolar} />}
+          {r.hasHandling && <Row label="Handling" usd={r.handling} dolar={dolar} />}
           <Row label="Envío nacional" usd={r.domestic} dolar={dolar} />
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
@@ -1352,7 +1355,7 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                   <span style={{ color:"#64748b" }}>Ingresos Brutos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.ib)}</span>
                 </>}
                 <span style={{ color:"#64748b" }}>Pick up</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.pickup)}</span>
-                {r.isAir && <><span style={{ color:"#64748b" }}>Handling</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.handling)}</span></>}
+                {(r.hasHandling ?? r.isAir) && <><span style={{ color:"#64748b" }}>Handling</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.handling)}</span></>}
                 <span style={{ color:"#64748b" }}>Envío nacional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.domestic)}</span>
                 <span style={{ color:"#64748b" }}>Honorarios de Gestión</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.fees)}</span>
                 <span style={{ color:"#475569", fontWeight:700, borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>Total envío</span><span style={{ fontWeight:700, color:"#0369a1", textAlign:"right", borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>{USD(r.totalLog)}</span>
@@ -1543,13 +1546,27 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               <Toggle label="Ingresos Brutos activo" k="ibOn"/><SF label="Ingresos Brutos (%)" k="ib" min={0} max={10}/>
             </Card>
             <Card icon="🚚" title="Servicios logísticos">
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                <SF label="Pick up (USD)" k="pickup"/><SF label="Handling -avión- (USD)" k="handling"/><SF label="Envío nacional -avión- (USD)" k="domestic"/><SF label="Envío nacional -barco- (USD)" k="domesticSea"/>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:16 }}>
+                <SF label="Pick up / Retiro en origen (USD)" k="pickup"/>
+                <SF label="Envío nacional -barco m³- (USD)" k="domesticSea"/>
               </div>
               <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
-                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>✈️ Regla del Handling (avión)</p>
+                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>✈️ Avión</p>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <SF label="Handling (USD)" k="handling"/>
+                  <SF label="Envío nacional (USD)" k="domestic"/>
+                </div>
                 <SF label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
-                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera este valor, el handling pasa a USD 0 automáticamente.</p>
+                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
+              </div>
+              <div style={{ background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
+                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <SF label="Handling (USD)" k="handlingSea"/>
+                  <SF label="Envío nacional (USD)" k="domesticSeaKg"/>
+                </div>
+                <SF label="Cobrar handling solo si peso real es menor a (kg)" k="handlingMaxKgSea" min={0} step="0.1"/>
+                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso real iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
               <Field label="Tipo de honorarios">
                 <div style={{ display:"flex", gap:12 }}>

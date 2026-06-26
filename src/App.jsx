@@ -169,15 +169,17 @@ const calculate = (d, s) => {
 
   let flete = 0, pVol = 0, pFact = 0, m3 = 0, m3Fact = 0, airRate = 0;
   if (byWeight) {
-    pVol  = (L * W * H) / 5000;
-    pFact = Math.max(pVol, peso);
     if (isAir) {
-      // Tarifa aérea según país de origen (USA y España propias; China u otro = China)
+      // Aéreo: peso facturable = el mayor entre volumétrico y real
+      pVol  = (L * W * H) / 5000;
+      pFact = Math.max(pVol, peso);
       airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
               : d.origenSel === "España"               ? (+s.airRateEspana || 0)
               : (+s.airRateChina || 0);
     } else {
-      // Marítimo por kilo: tarifa única configurable
+      // Marítimo por kilo: SOLO el peso real (sin volumétrico)
+      pVol  = 0;
+      pFact = peso;
       airRate = +s.seaRateKg || 0;
     }
     flete = pFact * airRate;
@@ -262,9 +264,11 @@ const buildWAMsg = (d, r, rate, s) => {
     "",
     "TIPO: " + tipo,
     "FOB / Valor productos: " + USD(r.fob),
-    r.byWeight
+    r.isAir
       ? ("Peso real: " + r.peso + " kg | Volumetrico: " + fmt(r.pVol) + " kg | Facturable: " + fmt(r.pFact) + " kg")
-      : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
+      : r.seaKg
+        ? ("Peso real: " + r.peso + " kg (se cobra por kilo real)")
+        : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
     "",
     "== COSTOS DETALLADOS ==",
     "Flete internacional: " + USD(r.flete),
@@ -377,10 +381,13 @@ const generatePDF = async (d, r, dolar, s) => {
   ]);
 
   const flete = [["FOB / Valor productos", USD(r.fob)]];
-  if (r.byWeight) {
+  if (r.isAir) {
     flete.push(["Peso real", `${r.peso} kg`], ["Peso volumétrico", `${fmt(r.pVol)} kg`],
       ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
-      [`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`, USD(r.flete)]);
+      [`Tarifa aérea (USD ${r.airRate}/kg)`, USD(r.flete)]);
+  } else if (r.seaKg) {
+    flete.push(["Peso real (se cobra por kilo real)", `${r.peso} kg`],
+      [`Tarifa marítima (USD ${r.airRate}/kg)`, USD(r.flete)]);
   } else {
     flete.push(["Volumen ingresado", `${fmt(r.m3, 3)} m³`],
       [`Volumen facturable (mín. ${s.seaMin} m³)`, `${fmt(r.m3Fact, 3)} m³`],
@@ -724,8 +731,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     if (!form.producto.trim()) e.producto = "Requerido";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
     if (!form.peso || +form.peso <= 0) e.peso = "Ingresá el peso total";
-    const byWeight = form.tipo === "avion" || (form.tipo === "barco" && form.seaMode === "kg");
-    if (byWeight && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
+    if (form.tipo === "avion" && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
     if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -737,8 +743,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     setForm(f => ({ ...f, files: names }));
   };
 
-  const byWeight = form.tipo === "avion" || (form.tipo === "barco" && form.seaMode === "kg");
-  const seaM3    = form.tipo === "barco" && form.seaMode !== "kg";
+  const seaKg    = form.tipo === "barco" && form.seaMode === "kg";
+  const byWeight = form.tipo === "avion" || seaKg;
+  const seaM3    = form.tipo === "barco" && !seaKg;
   const pVol  = byWeight && form.largo && form.ancho && form.alto
     ? (+form.largo * +form.ancho * +form.alto) / 5000 : 0;
   const pFact = Math.max(pVol, +form.peso || 0);
@@ -891,7 +898,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         </Card>
 
         <Card icon="📐" title="Peso y medidas">
-          {byWeight && (
+          {form.tipo === "avion" && (
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Medidas del paquete para calcular el <strong>peso volumétrico</strong></p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
@@ -901,6 +908,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               </div>
               {errors.medidas && <p style={{ color:"#ef4444", fontSize:11, marginBottom:12 }}>{errors.medidas}</p>}
             </>
+          )}
+          {seaKg && (
+            <div style={{ background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:12, marginBottom:16, fontSize:12, color:"#0369a1" }}>
+              <strong>⚖️ Marítimo por kilo:</strong> se cobra por el <strong>peso real</strong> (no se usan medidas ni peso volumétrico).
+            </div>
           )}
           {seaM3 && (
             <>
@@ -923,9 +935,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
           </Field>
 
-          {byWeight && form.largo && form.ancho && form.alto && form.peso && (
+          {form.tipo === "avion" && form.largo && form.ancho && form.alto && form.peso && (
             <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · {form.tipo === "avion" ? "Avión" : "Marítimo por kilo"}</p>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · Avión</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Peso volumétrico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
                 <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
@@ -1067,7 +1079,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
               <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.totalLog)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.byWeight ? "Kg facturable" : "M³ facturable"}</p>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.isAir ? "Kg facturable" : (r.seaKg ? "Peso (kg)" : "M³ facturable")}</p>
               <p style={{ fontWeight:700, fontSize:14 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
             </div>
           </div>
@@ -1102,15 +1114,17 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
         <Card icon="🌐" title="Flete internacional">
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
           {r.byWeight ? (<>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
-              <span style={{ color:"#334155" }}>Peso real total</span><span style={{ fontWeight:600 }}>{fmt(r.peso)} kg</span>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background: r.seaKg ? "#eff6ff" : "transparent" }}>
+              <span style={{ color: r.seaKg ? "#0369a1" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>Peso real {r.seaKg ? "(se cobra por kilo real)" : "total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0369a1" : "#1e293b" }}>{fmt(r.peso)} kg</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
-              <span style={{ color:"#334155" }}>Peso volumétrico (L×A×H / 5.000)</span><span style={{ fontWeight:600 }}>{fmt(r.pVol)} kg</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
-              <span style={{ fontWeight:700, color:"#0369a1" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.pFact)} kg</span>
-            </div>
+            {r.isAir && (<>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+                <span style={{ color:"#334155" }}>Peso volumétrico (L×A×H / 5.000)</span><span style={{ fontWeight:600 }}>{fmt(r.pVol)} kg</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
+                <span style={{ fontWeight:700, color:"#0369a1" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.pFact)} kg</span>
+              </div>
+            </>)}
             <Row label={`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
           </>) : (<>
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>

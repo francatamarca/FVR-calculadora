@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const ADMIN_PASS = "fvr2024";
-const WA_NUM = "5493885223299";
+const WA_NUM = "5493883372745";
 
 const DEF = {
   airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 8,
@@ -300,7 +300,7 @@ const buildWAMsg = (d, r, rate, s) => {
     d.files && d.files.length ? ("Archivos adjuntos: " + d.files.join(", ")) : "",
     "",
     "FVR Logistica Internacional",
-    "Francisco Vega | +54 9 3885 223299",
+    "Francisco Vega | +54 9 3883372745",
     "www.fvrlogistica.com.ar",
   ];
   return lines.filter(v => v !== undefined && v !== "").join("\n");
@@ -330,15 +330,34 @@ const generatePDF = async (d, r, dolar, s) => {
     ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
     : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
 
+  // Logo (dataURL) — opcional, si falla se usa el texto "FVR"
+  let logoData = null;
+  try {
+    logoData = await fetch("/logo-fvr.jpg").then(res => res.blob()).then(b => new Promise((ok, no) => {
+      const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(b);
+    }));
+  } catch {}
+  // Dólar oficial: si no vino, lo busco al vuelo para mostrar el valor en ARS
+  if (!dolar) {
+    try {
+      const dj = await fetch("https://criptoya.com/api/dolar").then(res => res.json());
+      dolar = dj?.oficial?.ask ?? dj?.oficial?.price ?? null;
+    } catch {}
+  }
+
   // ── Banda superior ──
   doc.setFillColor(...navy); doc.rect(0, 0, W, 32, "F");
-  doc.setFillColor(...sky); doc.roundedRect(M, 8, 16, 16, 2, 2, "F");
-  doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-  doc.text("FVR", M + 8, 18, { align: "center" });
+  doc.setFillColor(255, 255, 255); doc.roundedRect(M, 6, 20, 20, 2.5, 2.5, "F");
+  if (logoData) {
+    doc.addImage(logoData, "JPEG", M + 1, 7, 18, 18);
+  } else {
+    doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text("FVR", M + 10, 18, { align: "center" });
+  }
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
-  doc.text("FVR Logística Internacional", M + 21, 15);
+  doc.text("FVR Logística Internacional", M + 25, 15);
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
-  doc.text("Calculadora de Importaciones · www.fvrlogistica.com.ar", M + 21, 21);
+  doc.text("Calculadora de Importaciones · www.fvrlogistica.com.ar", M + 25, 21);
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
   doc.text("PRESUPUESTO", W - M, 11, { align: "right" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
@@ -424,20 +443,32 @@ const generatePDF = async (d, r, dolar, s) => {
 
   // ── Caja total ──
   const boxY = cursorY + 1;
-  doc.setFillColor(...navy); doc.roundedRect(M, boxY, W - 2 * M, 22, 2, 2, "F");
+  const boxH = 27;
+  doc.setFillColor(...navy); doc.roundedRect(M, boxY, W - 2 * M, boxH, 2, 2, "F");
+  // Izquierda: total envío (USD + ARS)
   doc.setTextColor(170, 200, 235); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
   doc.text("Total envío (sin producto)", M + 5, boxY + 7);
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
   doc.text(USD(r.totalLog), M + 5, boxY + 13.5);
+  if (dolar) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(170, 200, 235);
+    doc.text(`ARS ${fmt(r.totalLog * dolar, 0)}`, M + 5, boxY + 19.5);
+  }
+  // Derecha: total general (USD grande + ARS destacado)
   doc.setTextColor(125, 211, 252); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
   doc.text("TOTAL GENERAL DE IMPORTACIÓN", W - M - 5, boxY + 7, { align: "right" });
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-  doc.text(USD(r.totalGen), W - M - 5, boxY + 14, { align: "right" });
+  doc.text(USD(r.totalGen), W - M - 5, boxY + 14.5, { align: "right" });
   if (dolar) {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
-    doc.text(`ARS ${fmt(r.totalGen * dolar, 0)}  ·  dólar oficial $${fmt(dolar)}`, W - M - 5, boxY + 19, { align: "right" });
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(125, 211, 252);
+    doc.text(`ARS ${fmt(r.totalGen * dolar, 0)}`, W - M - 5, boxY + 22, { align: "right" });
   }
-  cursorY = boxY + 28;
+  cursorY = boxY + boxH + 5;
+  if (dolar) {
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7); doc.setTextColor(...gray);
+    doc.text(`Conversión al dólar oficial $${fmt(dolar)} del ${fechaStr} · sujeto a variación.`, M, cursorY);
+    cursorY += 4;
+  }
 
   // ── Legal + footer ──
   doc.setTextColor(...gray); doc.setFont("helvetica", "italic"); doc.setFontSize(7);
@@ -449,8 +480,8 @@ const generatePDF = async (d, r, dolar, s) => {
   doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
   doc.text("FVR Logística Internacional · Francisco Vega", M, cursorY);
   doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...gray);
-  doc.text("+54 9 3885 223299   ·   frannciissco@gmail.com   ·   www.fvrlogistica.com.ar", M, cursorY + 4);
-  doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD; conversión a ARS al dólar oficial vigente.`, M, cursorY + 8);
+  doc.text("+54 9 3883372745   ·   francisco@fvrlogistica.com   ·   www.fvrlogistica.com.ar", M, cursorY + 4);
+  doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD con su equivalente en ARS al dólar oficial.`, M, cursorY + 8);
 
   doc.save(`Presupuesto-FVR-${(d.nombre || "cliente").replace(/\s+/g, "-")}.pdf`);
 };
@@ -996,7 +1027,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
       <footer style={{ textAlign:"center", padding:"24px 16px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #e2e8f0", marginTop:16 }}>
         <p style={{ fontWeight:700, color:"#475569", marginBottom:4 }}>FVR Logística Internacional</p>
-        <p>Francisco Vega · frannciissco@gmail.com · +54 9 3885 223299</p>
+        <p>Francisco Vega · francisco@fvrlogistica.com · +54 9 3883372745</p>
         <div style={{ display:"flex", justifyContent:"center", gap:20, marginTop:8 }}>
           <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>🌐 fvrlogistica.com.ar</a>
           <a href="https://linktr.ee/FVRcomex" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>🔗 Linktree</a>

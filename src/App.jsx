@@ -5,7 +5,7 @@ const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493885223299";
 
 const DEF = {
-  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1,
+  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 8,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
@@ -161,17 +161,25 @@ const calculate = (d, s) => {
   const peso = +d.peso || 0;
   const L = +d.largo || 0, W = +d.ancho || 0, H = +d.alto || 0;
   const isAir      = d.tipo === "avion";
+  const seaKg      = d.tipo === "barco" && d.seaMode === "kg";   // marítimo por kilo
+  const seaM3      = d.tipo === "barco" && !seaKg;               // marítimo por m³
+  const byWeight   = isAir || seaKg;                             // se cobra por peso facturable
+  const internalTaxes = seaM3;                                   // impuestos internos: solo marítimo m³
   const isPersonal = isAir && d.subTipo === "personal";
 
   let flete = 0, pVol = 0, pFact = 0, m3 = 0, m3Fact = 0, airRate = 0;
-  if (isAir) {
+  if (byWeight) {
     pVol  = (L * W * H) / 5000;
     pFact = Math.max(pVol, peso);
-    // Tarifa aérea según país de origen (configurable en admin).
-    // USA y España tienen su propia tarifa; China y cualquier otro país usan la de China.
-    airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
-            : d.origenSel === "España"               ? (+s.airRateEspana || 0)
-            : (+s.airRateChina || 0);
+    if (isAir) {
+      // Tarifa aérea según país de origen (USA y España propias; China u otro = China)
+      airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
+              : d.origenSel === "España"               ? (+s.airRateEspana || 0)
+              : (+s.airRateChina || 0);
+    } else {
+      // Marítimo por kilo: tarifa única configurable
+      airRate = +s.seaRateKg || 0;
+    }
     flete = pFact * airRate;
   } else {
     m3     = +d.m3manual || 0;
@@ -198,9 +206,9 @@ const calculate = (d, s) => {
     stat    = cif * ((+s.stat || 0) / 100);
     ivaBase = cif + duty + stat;
     iva     = ivaBase * ((+s.vat || 0) / 100);
-    addVat  = !isAir && s.addVatOn ? ivaBase * ((+s.addVat || 0) / 100) : 0;
-    gains   = !isAir && s.gainsOn  ? ivaBase * ((+s.gains  || 0) / 100) : 0;
-    ib      = !isAir && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
+    addVat  = internalTaxes && s.addVatOn ? ivaBase * ((+s.addVat || 0) / 100) : 0;
+    gains   = internalTaxes && s.gainsOn  ? ivaBase * ((+s.gains  || 0) / 100) : 0;
+    ib      = internalTaxes && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
   }
 
   const pickup     = +s.pickup || 0;
@@ -227,7 +235,8 @@ const calculate = (d, s) => {
   const totalGen = fob + totalLog;
 
   return {
-    fob, isAir, isPersonal, peso, pVol, pFact, m3, m3Fact, airRate,
+    fob, isAir, seaKg, seaM3, byWeight, internalTaxes, isPersonal,
+    peso, pVol, pFact, m3, m3Fact, airRate,
     flete, seguro, cif, duty, stat, ivaBase, iva,
     addVat, gains, ib, pickup, handling, domestic, fees,
     totalLog, totalGen, effectiveDutyPct,
@@ -238,7 +247,7 @@ const calculate = (d, s) => {
 const buildWAMsg = (d, r, rate, s) => {
   const tipo = d.tipo === "avion"
     ? `Avion - ${d.subTipo === "personal" ? "Envio Personal (Franquicia)" : "Envio Comercial"}`
-    : "Barco";
+    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m3");
   const lines = [
     "== PRESUPUESTO DE IMPORTACION ==",
     "FVR Logistica Internacional",
@@ -253,7 +262,7 @@ const buildWAMsg = (d, r, rate, s) => {
     "",
     "TIPO: " + tipo,
     "FOB / Valor productos: " + USD(r.fob),
-    r.isAir
+    r.byWeight
       ? ("Peso real: " + r.peso + " kg | Volumetrico: " + fmt(r.pVol) + " kg | Facturable: " + fmt(r.pFact) + " kg")
       : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
     "",
@@ -262,11 +271,11 @@ const buildWAMsg = (d, r, rate, s) => {
     "Seguro (" + s.insurance + "%): " + USD(r.seguro),
     "CIF / Valor en aduana: " + USD(r.cif),
     r.isPersonal
-      ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.aiDutyRate !== null ? " - via IA" : "")) + "): " + USD(r.duty))
-      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.aiDutyRate !== null ? " - via IA" : "")) + "): " + USD(r.duty)),
+      ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty))
+      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
     r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
     r.isPersonal ? ("IVA (" + s.vat + "% s/FOB + derechos): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
-    ...(!r.isAir && !r.isPersonal
+    ...(r.internalTaxes && !r.isPersonal
       ? [
           "IVA adicional (" + s.addVat + "%): " + USD(r.addVat),
           "Ganancias (" + s.gains + "%): " + USD(r.gains),
@@ -296,8 +305,8 @@ const buildWAMsg = (d, r, rate, s) => {
 /* ── PDF HTML ────────────────────────────────────────────── */
 const generatePDFHTML = (d, r, dolar, s) => {
   const tipo = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Avion - Envio Personal (Franquicia)" : "Avion - Envio Comercial")
-    : "Barco";
+    ? (d.subTipo === "personal" ? "Avión - Envío Personal (Franquicia)" : "Avión - Envío Comercial")
+    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m³");
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Presupuesto FVR — ${d.nombre}</title>
 <style>
@@ -333,16 +342,16 @@ const generatePDFHTML = (d, r, dolar, s) => {
   <div class="row"><span>Email</span><span>${d.email || "—"}</span></div>
   <div class="row"><span>Producto</span><span>${d.producto}</span></div>
   <div class="row"><span>País de origen</span><span>${d.paisOrigen || "—"}</span></div>
-  <div class="row"><span>HS Code</span><span>${d.hsCode || "—"}${(!d.categoria && d.aiDutyRate !== null) ? ' <span class="badge">IA</span>' : ""}</span></div>
+  <div class="row"><span>HS Code</span><span>${d.hsCode || "—"}${(!d.categoria && !d.dutyManual && d.aiDutyRate !== null) ? ' <span class="badge">IA</span>' : ""}</span></div>
 </div>
 <div class="sec">
   <div class="st">Flete Internacional</div>
   <div class="row"><span>FOB / Valor productos</span><span>${USD(r.fob)}</span></div>
-  ${r.isAir ? `
+  ${r.byWeight ? `
   <div class="row"><span>Peso real</span><span>${r.peso} kg</span></div>
   <div class="row"><span>Peso volumétrico</span><span>${fmt(r.pVol)} kg</span></div>
   <div class="row hi"><span>Peso facturable (mayor)</span><span>${fmt(r.pFact)} kg</span></div>
-  <div class="row hi"><span>Tarifa aérea (USD ${r.airRate}/kg)</span><span>${USD(r.flete)}</span></div>
+  <div class="row hi"><span>${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)</span><span>${USD(r.flete)}</span></div>
   ` : `
   <div class="row"><span>Volumen ingresado</span><span>${fmt(r.m3, 3)} m³</span></div>
   <div class="row hi"><span>Volumen facturable (mín. ${s.seaMin} m³)</span><span>${fmt(r.m3Fact, 3)} m³</span></div>
@@ -355,19 +364,19 @@ const generatePDFHTML = (d, r, dolar, s) => {
   <div class="st">Tributos Aduaneros</div>
   ${r.isPersonal ? `
   <div class="row"><span>Franquicia personal activa</span><span class="badge">hasta USD 400 libre</span></div>
-  <div class="row hi"><span>Derecho de importación (${r.effectiveDutyPct}% sobre excedente${d.categoria ? " · categoría" : (d.aiDutyRate !== null ? " · detectado por IA" : "")})</span><span>${USD(r.duty)}</span></div>
+  <div class="row hi"><span>Derecho de importación (${r.effectiveDutyPct}% sobre excedente${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · detectado por IA" : ""))})</span><span>${USD(r.duty)}</span></div>
   <div class="row"><span>Tasa estadística</span><span class="na">No aplica</span></div>
   <div class="row"><span>IVA (${s.vat}% sobre FOB + derechos)</span><span>${USD(r.iva)}</span></div>
   ` : `
-  <div class="row"><span>Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.aiDutyRate !== null ? " · detectado por IA" : "")})</span><span>${USD(r.duty)}</span></div>
+  <div class="row"><span>Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · detectado por IA" : ""))})</span><span>${USD(r.duty)}</span></div>
   <div class="row"><span>Tasa estadística (${s.stat}%)</span><span>${USD(r.stat)}</span></div>
   <div class="row hi"><span>Base imponible IVA</span><span>${USD(r.ivaBase)}</span></div>
   <div class="row"><span>IVA (${s.vat}%)</span><span>${USD(r.iva)}</span></div>
   `}
 </div>
-${!r.isAir ? `
+${r.internalTaxes ? `
 <div class="sec">
-  <div class="st">Impuestos Internos (Barco)</div>
+  <div class="st">Impuestos Internos (Barco por m³)</div>
   <div class="row"><span>IVA adicional (${s.addVat}%)</span><span>${USD(r.addVat)}</span></div>
   <div class="row"><span>Ganancias (${s.gains}%)</span><span>${USD(r.gains)}</span></div>
   <div class="row"><span>Ingresos Brutos (${s.ib}%)</span><span>${USD(r.ib)}</span></div>
@@ -524,6 +533,29 @@ const SubTipoSel = ({ value, onChange }) => (
   </div>
 );
 
+const SeaModeSel = ({ value, onChange }) => (
+  <div style={{ marginTop:16 }}>
+    <p style={{ fontSize:11, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>Modalidad marítima</p>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      {[{ v:"m3", icon:"📦", label:"Por m³" }, { v:"kg", icon:"⚖️", label:"Por kilo" }].map(({ v, icon, label }) => (
+        <button key={v} onClick={() => onChange(v)} type="button"
+          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#0ea5e9":"#e2e8f0"}`,
+            background: value===v ? "#f0f9ff" : "#f8fafc", cursor:"pointer",
+            display:"flex", alignItems:"center", gap:10,
+            boxShadow: value===v ? "0 2px 10px rgba(14,165,233,0.12)" : "none" }}>
+          <span style={{ fontSize:22 }}>{icon}</span>
+          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0369a1" : "#334155" }}>{label}</span>
+        </button>
+      ))}
+    </div>
+    {value === "kg" && (
+      <div style={{ marginTop:10, background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:12, fontSize:12, color:"#0369a1" }}>
+        <strong>⚖️ Marítimo por kilo:</strong> se cobra por peso facturable (igual que el aéreo) y se calcula con los <strong>mismos impuestos que un envío aéreo comercial</strong>. Solo cambia la tarifa por kilo.
+      </div>
+    )}
+  </div>
+);
+
 /* ── AI ANALYSIS ─────────────────────────────────────────── */
 const callAnalyzeAPI = async (type, value) => {
   // cache-buster + no-store para evitar respuestas arancelarias cacheadas
@@ -546,8 +578,8 @@ const analyzeHsCode  = (hsCode)   => callAnalyzeAPI("hsCode",  hsCode);
 const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
   const [form, setForm] = useState({
     nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", paisOrigen:"", origenSel:"", fob:"",
-    categoria:"",
-    tipo:"avion", subTipo:"comercial", peso:"", largo:"", ancho:"", alto:"",
+    categoria:"", manualDuty:"", dutyManual:false,
+    tipo:"avion", subTipo:"comercial", seaMode:"m3", peso:"", largo:"", ancho:"", alto:"",
     m3manual:"", files:[], aiDutyRate: null, aiSuggestion: ""
   });
   const [errors, setErrors]       = useState({});
@@ -579,11 +611,24 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         ...f,
         categoria: label,
         aiDutyRate: cat.rate,
+        manualDuty: "", dutyManual: false,
         aiSuggestion: `Categoría: ${label} — Derecho de importación ${cat.rate}%`,
       }));
     } else {
       // "Seleccionar…": vuelve a usar IA / HS Code / valor por defecto
       setForm(f => ({ ...f, categoria:"", aiDutyRate: null, aiSuggestion:"" }));
+    }
+  };
+
+  // Arancel manual: el cliente que ya conoce su derecho de importación lo ingresa directo
+  const handleManualDuty = (val) => {
+    if (!touched) { onTrackStarted(); setTouched(true); }
+    const v = (val || "").toString().replace(/[^0-9.]/g, "");
+    if (v === "" || isNaN(+v)) {
+      setForm(f => ({ ...f, manualDuty:"", dutyManual:false, aiDutyRate: f.categoria ? f.aiDutyRate : null }));
+    } else {
+      setCatQuery(""); setAiResult(null);
+      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", aiSuggestion: `Arancel ingresado manualmente: ${v}%` }));
     }
   };
 
@@ -595,7 +640,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       setAiResult(result);
       setForm(f => ({
         ...f,
-        categoria: "",
+        categoria: "", manualDuty: "", dutyManual: false,
         hsCode: result.hsCode || f.hsCode,
         aiDutyRate: result.dutyRate ?? null,
         aiSuggestion: `${result.description} — Arancel estimado: ${result.dutyRate}% (confianza: ${result.confidence})`
@@ -614,7 +659,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       setAiResult(r => ({ ...r, ...result }));
       setForm(f => ({
         ...f,
-        categoria: "",
+        categoria: "", manualDuty: "", dutyManual: false,
         aiDutyRate: result.dutyRate ?? f.aiDutyRate,
         aiSuggestion: result.description
           ? `${result.description} — Arancel por HS ${f.hsCode}: ${result.dutyRate}% (confianza: ${result.confidence})`
@@ -633,8 +678,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     if (!form.producto.trim()) e.producto = "Requerido";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
     if (!form.peso || +form.peso <= 0) e.peso = "Ingresá el peso total";
-    if (form.tipo === "avion" && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
-    if (form.tipo === "barco" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
+    const byWeight = form.tipo === "avion" || (form.tipo === "barco" && form.seaMode === "kg");
+    if (byWeight && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
+    if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -645,7 +691,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     setForm(f => ({ ...f, files: names }));
   };
 
-  const pVol  = form.tipo === "avion" && form.largo && form.ancho && form.alto
+  const byWeight = form.tipo === "avion" || (form.tipo === "barco" && form.seaMode === "kg");
+  const seaM3    = form.tipo === "barco" && form.seaMode !== "kg";
+  const pVol  = byWeight && form.largo && form.ancho && form.alto
     ? (+form.largo * +form.ancho * +form.alto) / 5000 : 0;
   const pFact = Math.max(pVol, +form.peso || 0);
   const m3p   = +form.m3manual || 0;
@@ -761,6 +809,20 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.fob && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.fob}</p>}
             </Field>
           </div>
+
+          <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"12px 14px", marginBottom:16 }}>
+            <Field label="¿Ya conocés tu arancel? Ingresalo directo (%)" hint="Opcional. Si lo completás, se usa este valor y podés omitir la categoría y el HS Code.">
+              <div style={{ position:"relative", maxWidth:220 }}>
+                <Inp type="number" placeholder="Ej: 20" value={form.manualDuty}
+                  onChange={e => handleManualDuty(e.target.value)} min={0} max={100} step="0.5" style={{ paddingRight:32 }} />
+                <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#94a3b8", fontWeight:700 }}>%</span>
+              </div>
+            </Field>
+            {form.dutyManual && (
+              <p style={{ fontSize:12, color:"#92400e", fontWeight:700, margin:0 }}>✅ Derecho de importación cargado manualmente: {form.manualDuty}%</p>
+            )}
+          </div>
+
           <Field label="País de origen">
             <select value={form.origenSel} onChange={e => handleOrigen(e.target.value)} style={{ ...inputStyle, cursor:"pointer" }}>
               <option value="">Seleccionar país…</option>
@@ -779,10 +841,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         <Card icon="🌐" title="Tipo de importación" bg="#f0f9ff">
           <TypeSel value={form.tipo} onChange={v => set("tipo", v)} />
           {form.tipo === "avion" && <SubTipoSel value={form.subTipo} onChange={v => set("subTipo", v)} />}
+          {form.tipo === "barco" && <SeaModeSel value={form.seaMode} onChange={v => set("seaMode", v)} />}
         </Card>
 
         <Card icon="📐" title="Peso y medidas">
-          {form.tipo === "avion" && (
+          {byWeight && (
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Medidas del paquete para calcular el <strong>peso volumétrico</strong></p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
@@ -793,7 +856,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.medidas && <p style={{ color:"#ef4444", fontSize:11, marginBottom:12 }}>{errors.medidas}</p>}
             </>
           )}
-          {form.tipo === "barco" && (
+          {seaM3 && (
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Ingresá el <strong>volumen total en m³</strong> del embarque</p>
               <Field label="Metros cúbicos (m³)" required hint={`USD ${settings.seaRate || 600}/m³ · Mín. facturable: ${settings.seaMin || 1} m³`}>
@@ -814,9 +877,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
           </Field>
 
-          {form.tipo === "avion" && form.largo && form.ancho && form.alto && form.peso && (
+          {byWeight && form.largo && form.ancho && form.alto && form.peso && (
             <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · Avión</p>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · {form.tipo === "avion" ? "Avión" : "Marítimo por kilo"}</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Peso volumétrico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
                 <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
@@ -824,7 +887,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               </div>
             </div>
           )}
-          {form.tipo === "barco" && m3p > 0 && (
+          {seaM3 && m3p > 0 && (
             <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
               <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · Barco</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
@@ -908,8 +971,8 @@ const Row = ({ label, usd, dolar, hi, na, note }) => (
 /* ── RESULTS VIEW ────────────────────────────────────────── */
 const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWhatsApp }) => {
   const tipoLabel = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Avion - Envio Personal (Franquicia)" : "Avion - Envio Comercial")
-    : "Barco";
+    ? (d.subTipo === "personal" ? "Avión - Envío Personal (Franquicia)" : "Avión - Envío Comercial")
+    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m³");
 
   const handleDownloadPDF = () => {
     const html = generatePDFHTML(d, r, dolar, s);
@@ -959,8 +1022,8 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
               <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.totalLog)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.isAir ? "Kg facturable" : "M³ facturable"}</p>
-              <p style={{ fontWeight:700, fontSize:14 }}>{r.isAir ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
+              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.byWeight ? "Kg facturable" : "M³ facturable"}</p>
+              <p style={{ fontWeight:700, fontSize:14 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
             </div>
           </div>
         </div>
@@ -980,18 +1043,20 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
 
         {d.aiDutyRate !== null && d.aiDutyRate !== undefined && (
           <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:14, padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
-            <span style={{ fontSize:20 }}>{d.categoria ? "🏷️" : "🤖"}</span>
+            <span style={{ fontSize:20 }}>{d.categoria ? "🏷️" : (d.dutyManual ? "✍️" : "🤖")}</span>
             <p style={{ fontSize:12, color:"#166534" }}>
               {d.categoria
                 ? <><strong>Categoría seleccionada:</strong> {d.categoria} — derecho de importación <strong>{d.aiDutyRate}%</strong>. Verificar con despachante.</>
-                : <><strong>Análisis IA:</strong> Derecho de importación calculado al <strong>{d.aiDutyRate}%</strong> según tipo de producto detectado. Verificar con despachante.</>}
+                : d.dutyManual
+                  ? <><strong>Arancel manual:</strong> Derecho de importación cargado por el cliente al <strong>{d.aiDutyRate}%</strong>.</>
+                  : <><strong>Análisis IA:</strong> Derecho de importación calculado al <strong>{d.aiDutyRate}%</strong> según tipo de producto detectado. Verificar con despachante.</>}
             </p>
           </div>
         )}
 
         <Card icon="🌐" title="Flete internacional">
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
-          {r.isAir ? (<>
+          {r.byWeight ? (<>
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
               <span style={{ color:"#334155" }}>Peso real total</span><span style={{ fontWeight:600 }}>{fmt(r.peso)} kg</span>
             </div>
@@ -1001,7 +1066,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
               <span style={{ fontWeight:700, color:"#0369a1" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.pFact)} kg</span>
             </div>
-            <Row label={`Tarifa aérea (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
+            <Row label={`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
           </>) : (<>
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
               <span style={{ color:"#334155" }}>Volumen ingresado</span><span style={{ fontWeight:600 }}>{fmt(r.m3, 3)} m³</span>
@@ -1024,7 +1089,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
               note={r.fob <= 400 ? "FOB ≤ USD 400 — Exento" : `${r.effectiveDutyPct}% sobre USD ${fmt(r.fob - 400)} de excedente`} />
             <Row label={`IVA (${s.vat}% sobre FOB + derechos)`} usd={r.iva} dolar={dolar} />
           </>) : (<>
-            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.aiDutyRate !== null ? " · IA" : "")})`} usd={r.duty} dolar={dolar} />
+            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · IA" : ""))})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
             <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
             <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
@@ -1032,16 +1097,20 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
         </Card>
 
         <Card icon="📊" title="Impuestos internos">
-          {r.isAir
-            ? <div style={{ textAlign:"center", padding:"20px 0" }}>
-                <p style={{ fontSize:32, marginBottom:8 }}>✈️</p>
-                <p style={{ fontSize:13, color:"#64748b" }}>Los impuestos internos no aplican para importación por avión.</p>
-              </div>
-            : (<>
+          {r.internalTaxes
+            ? (<>
                 <Row label={`IVA adicional (${s.addVat}%)`} usd={r.addVat} dolar={dolar} />
                 <Row label={`Ganancias (${s.gains}%)`} usd={r.gains} dolar={dolar} />
                 <Row label={`Ingresos Brutos (${s.ib}%)`} usd={r.ib} dolar={dolar} />
               </>)
+            : <div style={{ textAlign:"center", padding:"20px 0" }}>
+                <p style={{ fontSize:32, marginBottom:8 }}>{r.isAir ? "✈️" : "🚢"}</p>
+                <p style={{ fontSize:13, color:"#64748b" }}>
+                  {r.seaKg
+                    ? "En la modalidad marítima por kilo no se aplican impuestos internos (se calcula como el aéreo comercial)."
+                    : "Los impuestos internos no aplican para importación por avión."}
+                </p>
+              </div>
           }
         </Card>
 
@@ -1187,7 +1256,7 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                 <span style={{ color:"#64748b" }}>Derecho importación</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.duty)}</span>
                 {!r.isPersonal && <><span style={{ color:"#64748b" }}>Tasa estadística</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.stat)}</span></>}
                 <span style={{ color:"#64748b" }}>IVA</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.iva)}</span>
-                {!r.isAir && !r.isPersonal && <>
+                {(r.internalTaxes ?? !r.isAir) && !r.isPersonal && <>
                   <span style={{ color:"#64748b" }}>IVA adicional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.addVat)}</span>
                   <span style={{ color:"#64748b" }}>Ganancias</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.gains)}</span>
                   <span style={{ color:"#64748b" }}>Ingresos Brutos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.ib)}</span>
@@ -1361,8 +1430,10 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             </Card>
             <Card icon="🚢" title="Flete marítimo">
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                <SF label="Tarifa marítima (USD / m³)" k="seaRate"/><SF label="Mínimo facturable (m³)" k="seaMin"/>
+                <SF label="Tarifa por m³ (USD / m³)" k="seaRate"/><SF label="Mínimo facturable (m³)" k="seaMin"/>
               </div>
+              <SF label="⚖️ Tarifa por kilo (USD / kg)" k="seaRateKg"/>
+              <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>La modalidad marítima "por kilo" se calcula con los mismos impuestos que el aéreo comercial; lo único que cambia es esta tarifa por kg.</p>
             </Card>
             <Card icon="🛡️" title="Seguro y aduana">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>

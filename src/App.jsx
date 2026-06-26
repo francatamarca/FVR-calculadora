@@ -11,7 +11,7 @@ const DEF = {
   addVatOn: true, gainsOn: true, ibOn: true,
   pickup: 20, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
   handlingSea: 15, handlingMaxKgSea: 3, domesticSeaKg: 0,
-  feeType: "percentage", feePct: 8, feePctSea: 5, feeBase: "fob", feeFixed: 150, feeFixedSea: 150,
+  feeType: "percentage", feePct: 8, feePctSea: 5, feePctKg: 8, feeBase: "fob", feeFixed: 150, feeFixedSea: 150, feeFixedKg: 150,
   manualDolar: null,
   legal: "Los valores calculados son estimativos y pueden variar según clasificación arancelaria, documentación comercial, tipo de mercadería, canal de importación, cotización del dólar, costos operativos y normativa vigente al momento de la operación.",
 };
@@ -229,9 +229,16 @@ const calculate = (d, s) => {
                    : (+s.domesticSea || 0);
   const baseCost = flete + seguro + duty + stat + iva + addVat + gains + ib + pickup + handling + domestic;
 
-  // Honorarios: % o monto fijo, diferenciado por tipo de envío (avión / barco)
-  const feePctEff   = isAir ? (+s.feePct || 0)   : (s.feePctSea   != null && s.feePctSea   !== "" ? +s.feePctSea   : (+s.feePct   || 0));
-  const feeFixedEff = isAir ? (+s.feeFixed || 0) : (s.feeFixedSea != null && s.feeFixedSea !== "" ? +s.feeFixedSea : (+s.feeFixed || 0));
+  // Honorarios: % o monto fijo, diferenciado por modalidad (avión / barco m³ / marítimo por kilo).
+  // Cada modalidad usa su valor; si no está configurado, cae al de barco y luego al de avión.
+  const pick = (k, kSea, kKg) => {
+    if (isAir) return +s[k] || 0;
+    if (seaKg && s[kKg] != null && s[kKg] !== "") return +s[kKg];
+    if (s[kSea] != null && s[kSea] !== "") return +s[kSea];
+    return +s[k] || 0;
+  };
+  const feePctEff   = pick("feePct",   "feePctSea",   "feePctKg");
+  const feeFixedEff = pick("feeFixed", "feeFixedSea", "feeFixedKg");
   let fees = 0;
   if (s.feeType === "fixed") {
     fees = feeFixedEff;
@@ -1581,14 +1588,16 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 </div>
               </Field>
               {s.feeType==="fixed"
-                ? <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                    <SF label="✈️ Honorarios fijos avión (USD)" k="feeFixed"/>
-                    <SF label="🚢 Honorarios fijos barco (USD)" k="feeFixedSea"/>
+                ? <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+                    <SF label="✈️ Avión (USD)" k="feeFixed"/>
+                    <SF label="🚢 Barco m³ (USD)" k="feeFixedSea"/>
+                    <SF label="⚖️ Marítimo kg (USD)" k="feeFixedKg"/>
                   </div>
                 : <>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                      <SF label="✈️ Honorarios avión (%)" k="feePct" min={0} max={30}/>
-                      <SF label="🚢 Honorarios barco (%)" k="feePctSea" min={0} max={30}/>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+                      <SF label="✈️ Avión (%)" k="feePct" min={0} max={30}/>
+                      <SF label="🚢 Barco m³ (%)" k="feePctSea" min={0} max={30}/>
+                      <SF label="⚖️ Marítimo kg (%)" k="feePctKg" min={0} max={30}/>
                     </div>
                     <Field label="Calcular % sobre">
                       <select value={s.feeBase||"fob"} onChange={e=>setS(p=>({...p,feeBase:e.target.value}))} style={inputStyle}>

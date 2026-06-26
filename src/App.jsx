@@ -302,104 +302,150 @@ const buildWAMsg = (d, r, rate, s) => {
   return lines.filter(v => v !== undefined && v !== "").join("\n");
 };
 
-/* ── PDF HTML ────────────────────────────────────────────── */
-const generatePDFHTML = (d, r, dolar, s) => {
+/* ── PDF REAL (vectorial, jsPDF) ─────────────────────────── */
+const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · IA" : ""));
+
+const generatePDF = async (d, r, dolar, s) => {
+  const { jsPDF } = await import("jspdf");
+  const autoTableMod = await import("jspdf-autotable");
+  const autoTable = autoTableMod.default || autoTableMod.autoTable;
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const M = 14;
+  const navy = [13, 35, 71], accent = [3, 105, 161], sky = [56, 189, 248], gray = [100, 116, 139];
+
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0"), mm = String(now.getMonth() + 1).padStart(2, "0");
+  const fechaStr = `${dd}/${mm}/${now.getFullYear()}`;
+  const venc = new Date(now.getTime() + 7 * 86400000);
+  const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
+  const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
   const tipo = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Avión - Envío Personal (Franquicia)" : "Avión - Envío Comercial")
-    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m³");
-  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Presupuesto FVR — ${d.nombre}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;max-width:720px;margin:0 auto;padding:24px;font-size:13px}
-  .hdr{background:#0d2347;color:white;padding:20px 24px;border-radius:10px;margin-bottom:18px}
-  .hdr h1{font-size:20px;margin-bottom:4px}
-  .hdr p{font-size:11px;opacity:.8;margin-top:2px}
-  .sec{margin-bottom:14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-  .st{background:#f8fafc;padding:8px 14px;font-weight:bold;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#475569;border-bottom:1px solid #e2e8f0}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-bottom:1px solid #f1f5f9;font-size:13px}
-  .row:last-child{border:0}
-  .hi{background:#eff6ff;font-weight:bold;color:#0369a1}
-  .na{color:#94a3b8;font-style:italic}
-  .tot{background:#0d2347;color:white;padding:18px 22px;border-radius:10px;margin-top:16px}
-  .tot .r1{display:flex;justify-content:space-between;margin-bottom:10px;font-size:14px}
-  .tot .r2{display:flex;justify-content:space-between;font-size:20px;font-weight:bold}
-  .tot .sub{font-size:10px;opacity:.6;margin-top:6px}
-  .legal{font-size:10px;color:#94a3b8;margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0;line-height:1.5}
-  .footer{text-align:center;font-size:11px;color:#64748b;margin-top:16px;padding-top:12px;border-top:1px solid #f1f5f9}
-  .badge{display:inline-block;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:bold}
-  @media print{body{padding:10px}}
-</style></head><body>
-<div class="hdr">
-  <h1>FVR Logística Internacional</h1>
-  <p>Calculadora de Importaciones · www.fvrlogistica.com.ar</p>
-  <p>Presupuesto generado: ${new Date().toLocaleDateString("es-AR", {day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} · ${tipo}</p>
-</div>
-<div class="sec">
-  <div class="st">Datos del cliente</div>
-  <div class="row"><span>Nombre</span><span><b>${d.nombre}</b></span></div>
-  <div class="row"><span>WhatsApp</span><span>${d.whatsapp}</span></div>
-  <div class="row"><span>Email</span><span>${d.email || "—"}</span></div>
-  <div class="row"><span>Producto</span><span>${d.producto}</span></div>
-  <div class="row"><span>País de origen</span><span>${d.paisOrigen || "—"}</span></div>
-  <div class="row"><span>HS Code</span><span>${d.hsCode || "—"}${(!d.categoria && !d.dutyManual && d.aiDutyRate !== null) ? ' <span class="badge">IA</span>' : ""}</span></div>
-</div>
-<div class="sec">
-  <div class="st">Flete Internacional</div>
-  <div class="row"><span>FOB / Valor productos</span><span>${USD(r.fob)}</span></div>
-  ${r.byWeight ? `
-  <div class="row"><span>Peso real</span><span>${r.peso} kg</span></div>
-  <div class="row"><span>Peso volumétrico</span><span>${fmt(r.pVol)} kg</span></div>
-  <div class="row hi"><span>Peso facturable (mayor)</span><span>${fmt(r.pFact)} kg</span></div>
-  <div class="row hi"><span>${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)</span><span>${USD(r.flete)}</span></div>
-  ` : `
-  <div class="row"><span>Volumen ingresado</span><span>${fmt(r.m3, 3)} m³</span></div>
-  <div class="row hi"><span>Volumen facturable (mín. ${s.seaMin} m³)</span><span>${fmt(r.m3Fact, 3)} m³</span></div>
-  <div class="row hi"><span>Tarifa marítima (USD ${s.seaRate}/m³)</span><span>${USD(r.flete)}</span></div>
-  `}
-  <div class="row"><span>Seguro (${s.insurance}%)</span><span>${USD(r.seguro)}</span></div>
-  <div class="row hi"><span>CIF / Valor en aduana</span><span>${USD(r.cif)}</span></div>
-</div>
-<div class="sec">
-  <div class="st">Tributos Aduaneros</div>
-  ${r.isPersonal ? `
-  <div class="row"><span>Franquicia personal activa</span><span class="badge">hasta USD 400 libre</span></div>
-  <div class="row hi"><span>Derecho de importación (${r.effectiveDutyPct}% sobre excedente${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · detectado por IA" : ""))})</span><span>${USD(r.duty)}</span></div>
-  <div class="row"><span>Tasa estadística</span><span class="na">No aplica</span></div>
-  <div class="row"><span>IVA (${s.vat}% sobre FOB + derechos)</span><span>${USD(r.iva)}</span></div>
-  ` : `
-  <div class="row"><span>Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · detectado por IA" : ""))})</span><span>${USD(r.duty)}</span></div>
-  <div class="row"><span>Tasa estadística (${s.stat}%)</span><span>${USD(r.stat)}</span></div>
-  <div class="row hi"><span>Base imponible IVA</span><span>${USD(r.ivaBase)}</span></div>
-  <div class="row"><span>IVA (${s.vat}%)</span><span>${USD(r.iva)}</span></div>
-  `}
-</div>
-${r.internalTaxes ? `
-<div class="sec">
-  <div class="st">Impuestos Internos (Barco por m³)</div>
-  <div class="row"><span>IVA adicional (${s.addVat}%)</span><span>${USD(r.addVat)}</span></div>
-  <div class="row"><span>Ganancias (${s.gains}%)</span><span>${USD(r.gains)}</span></div>
-  <div class="row"><span>Ingresos Brutos (${s.ib}%)</span><span>${USD(r.ib)}</span></div>
-</div>` : ""}
-<div class="sec">
-  <div class="st">Servicios Logísticos</div>
-  <div class="row"><span>Pick up / Retiro en origen</span><span>${USD(r.pickup)}</span></div>
-  ${r.isAir ? `<div class="row"><span>Handling</span><span>${USD(r.handling)}</span></div>` : ""}
-  <div class="row"><span>Envío nacional</span><span>${USD(r.domestic)}</span></div>
-  <div class="row hi"><span>Honorarios de Gestión</span><span>${USD(r.fees)}</span></div>
-</div>
-<div class="tot">
-  <div class="r1"><span>Total envío (sin producto):</span><span>${USD(r.totalLog)}${dolar ? ` · ARS ${fmt(r.totalLog * dolar, 0)}` : ""}</span></div>
-  <div class="r2"><span>TOTAL GENERAL:</span><span>${USD(r.totalGen)}</span></div>
-  ${dolar ? `<div class="r2" style="font-size:15px;margin-top:6px"><span></span><span>ARS ${fmt(r.totalGen * dolar, 0)}</span></div>
-  <div class="sub">Conversión al dólar oficial $${fmt(dolar)} · sujeto a variación</div>` : ""}
-</div>
-<div class="legal">${s.legal}</div>
-<div class="footer">
-  FVR Logística Internacional · Francisco Vega<br>
-  📱 +54 9 3885 223299 · ✉ frannciissco@gmail.com · 🌐 fvrlogistica.com.ar
-</div>
-</body></html>`;
+    ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
+    : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
+
+  // ── Banda superior ──
+  doc.setFillColor(...navy); doc.rect(0, 0, W, 32, "F");
+  doc.setFillColor(...sky); doc.roundedRect(M, 8, 16, 16, 2, 2, "F");
+  doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("FVR", M + 8, 18, { align: "center" });
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+  doc.text("FVR Logística Internacional", M + 21, 15);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
+  doc.text("Calculadora de Importaciones · www.fvrlogistica.com.ar", M + 21, 21);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+  doc.text("PRESUPUESTO", W - M, 11, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
+  doc.text(`N° ${presNro}`, W - M, 16, { align: "right" });
+  doc.text(`Fecha: ${fechaStr}`, W - M, 20.5, { align: "right" });
+  doc.text(`Válido hasta: ${validez}`, W - M, 25, { align: "right" });
+
+  // ── Cliente ──
+  let y = 41;
+  doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text(`Presupuesto para: ${d.nombre}`, M, y);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...gray);
+  doc.text(`${d.producto}  ·  ${tipo}`, M, y + 5.5);
+
+  let cursorY = y + 10;
+  const section = (title, body) => {
+    autoTable(doc, {
+      startY: cursorY,
+      head: [[{ content: title, colSpan: 2 }]],
+      body,
+      theme: "grid",
+      styles: { lineColor: [226, 232, 240], lineWidth: 0.1, cellPadding: 1.7 },
+      headStyles: { fillColor: accent, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: (W - 2 * M) * 0.62 }, 1: { halign: "right", cellWidth: (W - 2 * M) * 0.38 } },
+      margin: { left: M, right: M },
+    });
+    cursorY = doc.lastAutoTable.finalY + 3;
+  };
+
+  section("DATOS DEL CLIENTE Y PRODUCTO", [
+    ["Nombre", d.nombre],
+    ["WhatsApp", d.whatsapp],
+    ["Email", d.email || "—"],
+    ["Producto", d.producto],
+    ["País de origen", d.paisOrigen || "—"],
+    ["HS Code", d.hsCode || "—"],
+    ["Tipo de envío", tipo],
+  ]);
+
+  const flete = [["FOB / Valor productos", USD(r.fob)]];
+  if (r.byWeight) {
+    flete.push(["Peso real", `${r.peso} kg`], ["Peso volumétrico", `${fmt(r.pVol)} kg`],
+      ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
+      [`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`, USD(r.flete)]);
+  } else {
+    flete.push(["Volumen ingresado", `${fmt(r.m3, 3)} m³`],
+      [`Volumen facturable (mín. ${s.seaMin} m³)`, `${fmt(r.m3Fact, 3)} m³`],
+      [`Tarifa marítima (USD ${s.seaRate}/m³)`, USD(r.flete)]);
+  }
+  flete.push([`Seguro (${s.insurance}%)`, USD(r.seguro)], ["CIF / Valor en aduana", USD(r.cif)]);
+  section("FLETE INTERNACIONAL", flete);
+
+  const trib = [];
+  if (r.isPersonal) {
+    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix(d)})${r.fob <= 400 ? " — exento hasta USD 400" : " sobre excedente de USD 400"}`, USD(r.duty)]);
+    trib.push(["Tasa estadística", "No aplica"]);
+    trib.push([`IVA (${s.vat}% sobre FOB + derechos)`, USD(r.iva)]);
+  } else {
+    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix(d)})`, USD(r.duty)]);
+    trib.push([`Tasa estadística (${s.stat}%)`, USD(r.stat)]);
+    trib.push(["Base imponible IVA", USD(r.ivaBase)]);
+    trib.push([`IVA (${s.vat}%)`, USD(r.iva)]);
+  }
+  section("TRIBUTOS ADUANEROS", trib);
+
+  if (r.internalTaxes) {
+    section("IMPUESTOS INTERNOS (BARCO POR M³)", [
+      [`IVA adicional (${s.addVat}%)`, USD(r.addVat)],
+      [`Ganancias (${s.gains}%)`, USD(r.gains)],
+      [`Ingresos Brutos (${s.ib}%)`, USD(r.ib)],
+    ]);
+  }
+
+  const serv = [["Pick up / Retiro en origen", USD(r.pickup)]];
+  if (r.isAir) serv.push(["Handling", USD(r.handling)]);
+  serv.push(["Envío nacional", USD(r.domestic)], ["Honorarios de Gestión", USD(r.fees)]);
+  section("SERVICIOS LOGÍSTICOS", serv);
+
+  // ── Caja total ──
+  const boxY = cursorY + 1;
+  doc.setFillColor(...navy); doc.roundedRect(M, boxY, W - 2 * M, 22, 2, 2, "F");
+  doc.setTextColor(170, 200, 235); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.text("Total envío (sin producto)", M + 5, boxY + 7);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+  doc.text(USD(r.totalLog), M + 5, boxY + 13.5);
+  doc.setTextColor(125, 211, 252); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.text("TOTAL GENERAL DE IMPORTACIÓN", W - M - 5, boxY + 7, { align: "right" });
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text(USD(r.totalGen), W - M - 5, boxY + 14, { align: "right" });
+  if (dolar) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
+    doc.text(`ARS ${fmt(r.totalGen * dolar, 0)}  ·  dólar oficial $${fmt(dolar)}`, W - M - 5, boxY + 19, { align: "right" });
+  }
+  cursorY = boxY + 28;
+
+  // ── Legal + footer ──
+  doc.setTextColor(...gray); doc.setFont("helvetica", "italic"); doc.setFontSize(7);
+  const legalLines = doc.splitTextToSize(s.legal, W - 2 * M);
+  doc.text(legalLines, M, cursorY);
+  cursorY += legalLines.length * 2.8 + 4;
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2); doc.line(M, cursorY, W - M, cursorY);
+  cursorY += 5;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
+  doc.text("FVR Logística Internacional · Francisco Vega", M, cursorY);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...gray);
+  doc.text("+54 9 3885 223299   ·   frannciissco@gmail.com   ·   www.fvrlogistica.com.ar", M, cursorY + 4);
+  doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD; conversión a ARS al dólar oficial vigente.`, M, cursorY + 8);
+
+  doc.save(`Presupuesto-FVR-${(d.nombre || "cliente").replace(/\s+/g, "-")}.pdf`);
 };
 
 /* ── STATUS ──────────────────────────────────────────────── */
@@ -974,17 +1020,16 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
     ? (d.subTipo === "personal" ? "Avión - Envío Personal (Franquicia)" : "Avión - Envío Comercial")
     : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m³");
 
-  const handleDownloadPDF = () => {
-    const html = generatePDFHTML(d, r, dolar, s);
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `Presupuesto-FVR-${d.nombre.replace(/\s+/g, "-")}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const handleDownloadPDF = async () => {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      await generatePDF(d, r, dolar, s);
+    } catch (e) {
+      alert("No se pudo generar el PDF. Probá de nuevo en un momento.");
+    }
+    setPdfLoading(false);
   };
 
   const handleWA = () => {
@@ -1162,11 +1207,11 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
             {/* PDF Download */}
-            <button onClick={handleDownloadPDF}
+            <button onClick={handleDownloadPDF} disabled={pdfLoading}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #bae6fd",
-                background:"white", color:"#0369a1", fontSize:14, fontWeight:700,
-                cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-              📄 Descargar PDF
+                background: pdfLoading ? "#f1f5f9" : "white", color:"#0369a1", fontSize:14, fontWeight:700,
+                cursor: pdfLoading ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              {pdfLoading ? "⏳ Generando…" : "📄 Descargar PDF"}
             </button>
             {/* Back */}
             <button onClick={onBack}
@@ -1176,7 +1221,7 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
             </button>
           </div>
           <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
-            El PDF se descarga como HTML — abrilo en el navegador y presioná Ctrl+P para guardar como PDF
+            Se descarga un PDF listo para abrir y compartir con tu cliente
           </p>
         </div>
       </main>

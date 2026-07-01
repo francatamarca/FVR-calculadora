@@ -397,8 +397,10 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const { type, value } = req.body || {};
-  if (!value) return res.status(400).json({ error: "Falta el valor a analizar" });
+  const { type } = req.body || {};
+  let { value } = req.body || {};
+  if (!value || typeof value !== "string") return res.status(400).json({ error: "Falta el valor a analizar" });
+  value = value.trim().slice(0, 300); // límite defensivo: evita token-wastage y payloads absurdos
 
   // ── Try Claude API first ──────────────────────────────────────────────
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -428,6 +430,10 @@ Responde ÚNICAMENTE en JSON sin markdown ni backticks:
     }
 
     try {
+      // Timeout de 8s: las funciones de Vercel (hobby) cortan a los 10s;
+      // si Anthropic tarda, caemos a la tabla estática en vez de morir sin respuesta.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -440,9 +446,17 @@ Responde ÚNICAMENTE en JSON sin markdown ni backticks:
           max_tokens: 300,
           messages: [{ role: "user", content: prompt }],
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
+      if (!response.ok) throw new Error(`Anthropic ${response.status}`); // no reenviar errores internos al cliente
       const data = await response.json();
-      return res.status(200).json(data);
+      // Validar server-side que la respuesta sea JSON parseable con dutyRate numérico;
+      // si no lo es (alucinación / prompt injection / truncado), caer al estático.
+      const text = data?.content?.[0]?.text || "";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (typeof parsed.dutyRate !== "number" || parsed.dutyRate < 0 || parsed.dutyRate > 50) throw new Error("respuesta IA inválida");
+      return res.status(200).json({ content: [{ text: JSON.stringify(parsed) }] });
     } catch {
       // fall through to static lookup
     }

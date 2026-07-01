@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useState, useEffect, lazy, Suspense } from "react";
+
+// Charts del admin en chunk aparte: los clientes no descargan recharts (~250 KB)
+const AdminCharts = lazy(() => import("./AdminCharts.jsx"));
 
 const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493883372745";
@@ -383,7 +385,7 @@ const generatePDF = async (d, r, dolar, s) => {
   // ── Cliente ──
   let y = 41;
   doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-  doc.text(`Presupuesto para: ${d.nombre}`, M, y);
+  doc.text(`Presupuesto para: ${(d.nombre || "").slice(0, 60)}`, M, y);
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...gray);
   doc.text(`${d.producto}  ·  ${tipo}`, M, y + 5.5);
 
@@ -498,24 +500,25 @@ const generatePDF = async (d, r, dolar, s) => {
   doc.text("+54 9 3883372745   ·   francisco@fvrlogistica.com   ·   www.fvrlogistica.com.ar", M, cursorY + 4);
   doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD con su equivalente en ARS al dólar oficial.`, M, cursorY + 8);
 
-  doc.save(`Presupuesto-FVR-${(d.nombre || "cliente").replace(/\s+/g, "-")}.pdf`);
+  const safeName = (d.nombre || "cliente").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 40).replace(/\s+/g, "-") || "cliente";
+  doc.save(`Presupuesto-FVR-${safeName}.pdf`);
 };
 
 /* ── STATUS ──────────────────────────────────────────────── */
 const STATUS_MAP = {
-  nuevo:       { label: "Nuevo",       cls: "bg-sky-100 text-sky-700" },
-  en_analisis: { label: "En análisis", cls: "bg-amber-100 text-amber-700" },
-  respondido:  { label: "Respondido",  cls: "bg-green-100 text-green-700" },
-  cerrado:     { label: "Cerrado",     cls: "bg-slate-100 text-slate-500" },
+  nuevo:       { label: "Nuevo",       bg: "#e0f2fe", fg: "#0369a1" },
+  en_analisis: { label: "En análisis", bg: "#fef3c7", fg: "#b45309" },
+  respondido:  { label: "Respondido",  bg: "#dcfce7", fg: "#15803d" },
+  cerrado:     { label: "Cerrado",     bg: "#f1f5f9", fg: "#64748b" },
 };
 const Badge = ({ status }) => {
   const s = STATUS_MAP[status] || STATUS_MAP.nuevo;
-  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>;
+  return <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:99, background:s.bg, color:s.fg, whiteSpace:"nowrap" }}>{s.label}</span>;
 };
 
 /* ── WA ICON ─────────────────────────────────────────────── */
-const WAIcon = ({ cls = "w-7 h-7" }) => (
-  <svg viewBox="0 0 24 24" className={`${cls} fill-current`}>
+const WAIcon = ({ size = 28 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} style={{ fill: "currentColor", flexShrink: 0 }} aria-hidden="true">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
   </svg>
 );
@@ -534,7 +537,7 @@ const WAFloat = () => (
 /* ── HEADER ──────────────────────────────────────────────── */
 const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar }) => (
   <header style={{ background: "linear-gradient(135deg,#0a1628 0%,#0d2347 50%,#0a1f42 100%)", color:"white" }}>
-    <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+    <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#38bdf8,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#0c2340", fontSize:13 }}>FVR</div>
         <div>
@@ -546,9 +549,9 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar }) => (
         <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ color:"#7dd3fc" }}>Dólar oficial:</span>
           <span style={{ fontWeight:700 }}>
-            {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}}>⚠ Manual</span> : `$${fmt(dolar, 2)}`}
+            {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}} title="Sin conexión con las fuentes de cotización — se usa la última conocida">{`$${fmt(dolar, 2)} ⚠`}</span> : `$${fmt(dolar, 2)}`}
           </span>
-          <button onClick={onRefreshDolar} style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:14 }}>↺</button>
+          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:14 }}>↺</button>
         </div>
         <button onClick={onAdmin} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer" }}>
           Panel Admin
@@ -684,7 +687,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const [errors, setErrors]       = useState({});
   const [fileNames, setFileNames] = useState([]);
   const [touched, setTouched]     = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(null); // null | "product" | "hs"
   const [aiResult, setAiResult]   = useState(null);
   const [catQuery, setCatQuery]   = useState("");
   const [catOpen, setCatOpen]     = useState(false);
@@ -732,8 +735,8 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   };
 
   const handleAnalyzeProduct = async () => {
-    if (!form.producto.trim()) return;
-    setAiLoading(true);
+    if (!form.producto.trim() || aiLoading) return;
+    setAiLoading("product");
     try {
       const result = await analyzeProduct(form.producto);
       setAiResult(result);
@@ -747,12 +750,12 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     } catch (e) {
       setAiResult({ error: true });
     }
-    setAiLoading(false);
+    setAiLoading(null);
   };
 
   const handleAnalyzeHsCode = async () => {
-    if (!form.hsCode.trim()) return;
-    setAiLoading(true);
+    if (!form.hsCode.trim() || aiLoading) return;
+    setAiLoading("hs");
     try {
       const result = await analyzeHsCode(form.hsCode);
       setAiResult(r => ({ ...r, ...result }));
@@ -767,15 +770,17 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     } catch {
       setAiResult({ error: true });
     }
-    setAiLoading(false);
+    setAiLoading(null);
   };
 
   const validate = () => {
     const e = {};
     if (!form.nombre.trim())  e.nombre  = "Requerido";
     if (!form.whatsapp.trim()) e.whatsapp = "Requerido";
+    else if (form.whatsapp.replace(/\D/g, "").length < 8) e.whatsapp = "Ingresá un número de WhatsApp válido";
     if (!form.producto.trim()) e.producto = "Requerido";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
+    else if (+form.fob > 10000000) e.fob = "Valor demasiado alto — revisalo";
     if (!form.peso || +form.peso <= 0) e.peso = "Ingresá el peso total";
     if (form.tipo === "avion" && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
     if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
@@ -798,7 +803,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const m3p   = +form.m3manual || 0;
   const m3f   = Math.max(+settings.seaMin || 1, m3p);
 
-  const rowS = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 };
+  const rowS = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:16 };
 
   return (
     <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
@@ -826,10 +831,10 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <div style={{ display:"flex", gap:8 }}>
               <Inp placeholder="Descripción del producto" value={form.producto}
                 onChange={e => set("producto", e.target.value)} style={{ flex:1 }} />
-              <button onClick={handleAnalyzeProduct} disabled={aiLoading || !form.producto.trim()}
-                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading ? "#e2e8f0" : "linear-gradient(135deg,#0369a1,#0ea5e9)",
-                  color: aiLoading ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading ? "wait" : "pointer", whiteSpace:"nowrap" }}>
-                {aiLoading ? "⏳ Analizando…" : "🤖 Analizar IA"}
+              <button onClick={handleAnalyzeProduct} disabled={aiLoading === "product" || !form.producto.trim()} aria-label="Analizar producto con IA"
+                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#e2e8f0" : "linear-gradient(135deg,#0369a1,#0ea5e9)",
+                  color: aiLoading === "product" ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading === "product" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
+                {aiLoading === "product" ? "⏳ Analizando…" : "🤖 Analizar IA"}
               </button>
             </div>
             {errors.producto && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.producto}</p>}
@@ -839,7 +844,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <div style={{ position:"relative" }}>
               <Inp placeholder="Buscá: zapatilla, celular, perfume, heladera…"
                 value={catQuery}
-                onChange={e => { setCatQuery(e.target.value); setCatOpen(true); if (!e.target.value.trim()) handleCategoria(""); }}
+                onChange={e => { const v = e.target.value; setCatQuery(v); setCatOpen(true); if (!v.trim() || (form.categoria && v !== form.categoria)) handleCategoria(""); }}
                 onFocus={() => setCatOpen(true)}
                 onBlur={() => setTimeout(() => setCatOpen(false), 150)} />
               {catOpen && (() => {
@@ -891,12 +896,12 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <Field label="HS Code / Código arancelario" hint="Completá manualmente o detectá con IA">
               <div style={{ display:"flex", gap:6 }}>
                 <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} style={{ flex:1 }} />
-                <button onClick={handleAnalyzeHsCode} disabled={aiLoading || !form.hsCode.trim()} title="Buscar arancel por HS Code"
+                <button onClick={handleAnalyzeHsCode} disabled={aiLoading === "hs" || !form.hsCode.trim()} title="Buscar arancel por HS Code" aria-label="Buscar arancel por HS Code"
                   style={{ padding:"0 10px", borderRadius:10, border:"none",
-                    background: aiLoading ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
-                    color: aiLoading ? "#94a3b8" : "white", fontWeight:700, fontSize:13,
-                    cursor: aiLoading ? "wait" : "pointer", whiteSpace:"nowrap" }}>
-                  🔍
+                    background: aiLoading === "hs" ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
+                    color: aiLoading === "hs" ? "#94a3b8" : "white", fontWeight:700, fontSize:13,
+                    cursor: aiLoading === "hs" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
+                  {aiLoading === "hs" ? "⏳" : "🔍"}
                 </button>
               </div>
             </Field>
@@ -1085,16 +1090,14 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
     setPdfLoading(false);
   };
 
-  const handleWA = () => {
-    const msg = buildWAMsg(d, r, dolar, s);
-    const url = `https://wa.me/${WA_NUM}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+  // El envío por WhatsApp usa onWhatsApp (del root): además de abrir el chat,
+  // incrementa la métrica "Enviados WA" del dashboard. No duplicar acá.
 
   return (
     <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
       <Header onAdmin={() => {}} dolar={dolar} dolarErr={false} dolarLoading={false} onRefreshDolar={() => {}} />
-      <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
+      {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
+      <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
 
         {/* Hero */}
         <div style={{ background:"linear-gradient(135deg,#0d2347 0%,#0369a1 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(13,35,71,0.35)" }}>
@@ -1250,13 +1253,13 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
         {/* ACTION BUTTONS */}
         <div style={{ marginBottom:32 }}>
           {/* WhatsApp */}
-          <button onClick={handleWA}
+          <button onClick={onWhatsApp}
             style={{ width:"100%", padding:"16px 0", borderRadius:16, border:"none",
               background:"linear-gradient(135deg,#16a34a,#22c55e)", color:"white",
               fontSize:17, fontWeight:900, cursor:"pointer", marginBottom:12,
               display:"flex", alignItems:"center", justifyContent:"center", gap:12,
               boxShadow:"0 4px 20px rgba(22,163,74,0.35)" }}>
-            <WAIcon cls="w-6 h-6" />
+            <WAIcon size={24} />
             Enviar presupuesto por WhatsApp
           </button>
 
@@ -1394,27 +1397,32 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
 };
 
 /* ── ADMIN PANEL ─────────────────────────────────────────── */
+// SettingField/SettingToggle viven FUERA de AdminPanel a propósito: si se
+// definen dentro del render, React los ve como un tipo nuevo en cada tecla
+// y desmonta/remonta el input → el campo pierde el foco al tipear.
+const SettingField = ({ s, setS, label, k, min, max, step = "0.01" }) => (
+  <Field label={label}>
+    <Inp type="number" min={min} max={max} step={step} value={s[k]} onChange={e => setS(p => ({ ...p, [k]: +e.target.value }))} />
+  </Field>
+);
+const SettingToggle = ({ s, setS, label, k }) => (
+  <label style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", cursor:"pointer" }}>
+    <span style={{ fontSize:13, color:"#334155" }}>{label}</span>
+    <button onClick={() => setS(p => ({ ...p, [k]: !p[k] }))}
+      style={{ width:44, height:24, borderRadius:99, background: s[k] ? "#0ea5e9" : "#cbd5e1", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+      <span style={{ position:"absolute", top:2, width:20, height:20, background:"white", borderRadius:"50%", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"left 0.2s", left: s[k] ? 22 : 2 }} />
+    </button>
+  </label>
+);
+
 const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics, dolar, fetchDolar, onLogout }) => {
   const [tab, setTab]   = useState("dashboard");
   const [s, setS]       = useState({ ...DEF, ...settings });
   const [saved, setSaved] = useState(false);
   const [filter, setFilter] = useState({ status:"", tipo:"", q:"" });
 
-  const save = () => { saveSettings(s); setSaved(true); setTimeout(() => setSaved(false), 2000); };
-  const SF = ({ label, k, min, max, step="0.01" }) => (
-    <Field label={label}>
-      <Inp type="number" min={min} max={max} step={step} value={s[k]} onChange={e => setS(p => ({ ...p, [k]: +e.target.value }))} />
-    </Field>
-  );
-  const Toggle = ({ label, k }) => (
-    <label style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", cursor:"pointer" }}>
-      <span style={{ fontSize:13, color:"#334155" }}>{label}</span>
-      <button onClick={() => setS(p => ({ ...p, [k]: !p[k] }))}
-        style={{ width:44, height:24, borderRadius:99, background: s[k] ? "#0ea5e9" : "#cbd5e1", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
-        <span style={{ position:"absolute", top:2, width:20, height:20, background:"white", borderRadius:"50%", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"left 0.2s", left: s[k] ? 22 : 2 }} />
-      </button>
-    </label>
-  );
+  // Al guardar, refrescar el dólar por si cambió la carga manual (el Header lo muestra en vivo)
+  const save = () => { saveSettings(s); fetchDolar(); setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
   const fq = quotes.filter(q => {
     if (filter.status && q.status !== filter.status) return false;
@@ -1424,16 +1432,22 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
   });
 
   const exportCSV = () => {
+    // Celda CSV segura: escapa comillas/comas/saltos y neutraliza fórmulas (=,+,-,@)
+    // para que Excel no ejecute contenido ingresado por clientes (CSV injection).
+    const cell = (v) => {
+      let x = v === null || v === undefined ? "" : String(v);
+      if (/^[=+\-@\t\r]/.test(x)) x = "'" + x;
+      return /[",;\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
+    };
     const H = ["Fecha","Cliente","WhatsApp","Email","Producto","HS Code","Tipo","SubTipo","FOB","Total Envío","Total General","Estado"];
-    const R = quotes.map(q => [new Date(q.date).toLocaleDateString("es-AR"),q.client,q.whatsapp,q.email,q.product,q.hsCode,q.importType,q.formData?.subTipo||"—",q.results?.fob,q.results?.totalLog,q.results?.totalGen,q.status]);
+    const R = quotes.map(q => [new Date(q.date).toISOString().slice(0,10),q.client,q.whatsapp,q.email,q.product,q.hsCode,q.importType,q.formData?.subTipo||"—",q.results?.fob,q.results?.totalLog,q.results?.totalGen,q.status]);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["\uFEFF"+[H,...R].map(r=>r.join(",")).join("\n")],{type:"text/csv;charset=utf-8;"}));
+    a.href = URL.createObjectURL(new Blob(["\uFEFF"+[H,...R].map(r=>r.map(cell).join(",")).join("\n")],{type:"text/csv;charset=utf-8;"}));
     a.download = "fvr_presupuestos.csv"; a.click();
   };
 
   const last7 = Array.from({length:7},(_,i)=>{ const dt=new Date(); dt.setDate(dt.getDate()-(6-i)); const ds=dt.toLocaleDateString("es-AR"); return {day:dt.toLocaleDateString("es-AR",{weekday:"short"}),count:quotes.filter(q=>new Date(q.date).toLocaleDateString("es-AR")===ds).length}; });
   const sdData = Object.entries(quotes.reduce((a,q)=>{a[q.status||"nuevo"]=(a[q.status||"nuevo"]||0)+1;return a;},{})).map(([n,v])=>({name:STATUS_MAP[n]?.label||n,value:v}));
-  const CLR = ["#0ea5e9","#f59e0b","#22c55e","#94a3b8"];
 
   const navStyle = (id) => ({
     display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:12,
@@ -1453,7 +1467,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12, color:"#7dd3fc" }}>
             <span>Dólar: ${fmt(dolar)}</span>
-            <button onClick={fetchDolar} style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:16 }}>↺</button>
+            <button onClick={fetchDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:16 }}>↺</button>
             <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.1)", border:"none", color:"white", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Cerrar sesión</button>
           </div>
         </div>
@@ -1470,7 +1484,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
 
         {tab === "dashboard" && (
           <div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:24 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:16, marginBottom:24 }}>
               {[{l:"Visitas",v:metrics.visits,i:"👁️"},{l:"Empezaron",v:metrics.started,i:"📝"},{l:"Presupuestos",v:metrics.generated,i:"📋"},{l:"Enviados WA",v:metrics.sentWhatsapp,i:"💬"}].map(({l,v,i})=>(
                 <div key={l} style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}>
                   <p style={{ fontSize:24, marginBottom:4 }}>{i}</p>
@@ -1479,19 +1493,10 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 </div>
               ))}
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
-              <div style={{ background:"white", borderRadius:16, padding:20, border:"1px solid #f1f5f9" }}>
-                <p style={{ fontWeight:700, fontSize:13, color:"#334155", marginBottom:12 }}>Últimos 7 días</p>
-                <ResponsiveContainer width="100%" height={140}><BarChart data={last7}><XAxis dataKey="day" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} allowDecimals={false}/><Tooltip/><Bar dataKey="count" fill="#0ea5e9" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
-              </div>
-              <div style={{ background:"white", borderRadius:16, padding:20, border:"1px solid #f1f5f9" }}>
-                <p style={{ fontWeight:700, fontSize:13, color:"#334155", marginBottom:12 }}>Por estado</p>
-                {sdData.length > 0
-                  ? <ResponsiveContainer width="100%" height={140}><PieChart><Pie data={sdData} cx="50%" cy="50%" innerRadius={30} outerRadius={58} dataKey="value" label={({name,value})=>`${name}:${value}`} labelLine={false} fontSize={10}>{sdData.map((_,i)=><Cell key={i} fill={CLR[i%CLR.length]}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer>
-                  : <div style={{ height:140, display:"flex", alignItems:"center", justifyContent:"center", color:"#94a3b8", fontSize:13 }}>Sin datos</div>}
-              </div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            <Suspense fallback={<div style={{ height:180, display:"flex", alignItems:"center", justifyContent:"center", color:"#94a3b8", fontSize:13 }}>Cargando gráficos…</div>}>
+              <AdminCharts last7={last7} sdData={sdData} />
+            </Suspense>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
               <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Total cotizado USD</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0))}</p></div>
               <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Promedio</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{quotes.length?USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0)/quotes.length):USD(0)}</p></div>
               <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Tipo más elegido</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{quotes.filter(q=>q.importType==="avion").length>=quotes.filter(q=>q.importType==="barco").length?"✈️ Avión":"Barco"}</p></div>
@@ -1521,25 +1526,25 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
         {tab === "settings" && (
           <div>
             <Card icon="✈️" title="Flete aéreo (USD / kg) por país de origen">
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                <SF label="🇺🇸 Estados Unidos" k="airRateUSA"/>
-                <SF label="🇨🇳 China" k="airRateChina"/>
-                <SF label="🇪🇸 España" k="airRateEspana"/>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
+                <SettingField s={s} setS={setS} label="🇺🇸 Estados Unidos" k="airRateUSA"/>
+                <SettingField s={s} setS={setS} label="🇨🇳 China" k="airRateChina"/>
+                <SettingField s={s} setS={setS} label="🇪🇸 España" k="airRateEspana"/>
               </div>
               <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa es fija por kg (no varía con el peso). Cualquier otro país de origen usa la tarifa de China.</p>
             </Card>
             <Card icon="🚢" title="Flete marítimo">
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                <SF label="Tarifa por m³ (USD / m³)" k="seaRate"/><SF label="Mínimo facturable (m³)" k="seaMin"/>
+                <SettingField s={s} setS={setS} label="Tarifa por m³ (USD / m³)" k="seaRate"/><SettingField s={s} setS={setS} label="Mínimo facturable (m³)" k="seaMin"/>
               </div>
-              <SF label="⚖️ Tarifa por kilo (USD / kg)" k="seaRateKg"/>
+              <SettingField s={s} setS={setS} label="⚖️ Tarifa por kilo (USD / kg)" k="seaRateKg"/>
               <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>La modalidad marítima "por kilo" se calcula con los mismos impuestos que el aéreo comercial; lo único que cambia es esta tarifa por kg.</p>
             </Card>
             <Card icon="🛡️" title="Seguro y aduana">
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                <SF label="Seguro (%)" k="insurance" min={0} max={10}/>
-                <SF label="Derecho importación (%)" k="duty" min={0} max={50}/>
-                <SF label="Tasa estadística (%)" k="stat" min={0} max={5}/>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
+                <SettingField s={s} setS={setS} label="Seguro (%)" k="insurance" min={0} max={10}/>
+                <SettingField s={s} setS={setS} label="Derecho importación (%)" k="duty" min={0} max={50}/>
+                <SettingField s={s} setS={setS} label="Tasa estadística (%)" k="stat" min={0} max={5}/>
               </div>
               <Field label="IVA">
                 <select value={s.vat} onChange={e=>setS(p=>({...p,vat:+e.target.value}))} style={inputStyle}>
@@ -1548,31 +1553,31 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               </Field>
             </Card>
             <Card icon="📊" title="Impuestos internos (barco)">
-              <Toggle label="IVA adicional activo" k="addVatOn"/><SF label="IVA adicional (%)" k="addVat" min={0} max={50}/>
-              <Toggle label="Ganancias activo" k="gainsOn"/><SF label="Ganancias (%)" k="gains" min={0} max={20}/>
-              <Toggle label="Ingresos Brutos activo" k="ibOn"/><SF label="Ingresos Brutos (%)" k="ib" min={0} max={10}/>
+              <SettingToggle s={s} setS={setS} label="IVA adicional activo" k="addVatOn"/><SettingField s={s} setS={setS} label="IVA adicional (%)" k="addVat" min={0} max={50}/>
+              <SettingToggle s={s} setS={setS} label="Ganancias activo" k="gainsOn"/><SettingField s={s} setS={setS} label="Ganancias (%)" k="gains" min={0} max={20}/>
+              <SettingToggle s={s} setS={setS} label="Ingresos Brutos activo" k="ibOn"/><SettingField s={s} setS={setS} label="Ingresos Brutos (%)" k="ib" min={0} max={10}/>
             </Card>
             <Card icon="🚚" title="Servicios logísticos">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:16 }}>
-                <SF label="Pick up / Retiro en origen (USD)" k="pickup"/>
-                <SF label="Envío nacional -barco m³- (USD)" k="domesticSea"/>
+                <SettingField s={s} setS={setS} label="Pick up / Retiro en origen (USD)" k="pickup"/>
+                <SettingField s={s} setS={setS} label="Envío nacional -barco m³- (USD)" k="domesticSea"/>
               </div>
               <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
                 <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>✈️ Avión</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                  <SF label="Handling (USD)" k="handling"/>
-                  <SF label="Envío nacional (USD)" k="domestic"/>
+                  <SettingField s={s} setS={setS} label="Handling (USD)" k="handling"/>
+                  <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domestic"/>
                 </div>
-                <SF label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
+                <SettingField s={s} setS={setS} label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
                 <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
               <div style={{ background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
                 <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                  <SF label="Handling (USD)" k="handlingSea"/>
-                  <SF label="Envío nacional (USD)" k="domesticSeaKg"/>
+                  <SettingField s={s} setS={setS} label="Handling (USD)" k="handlingSea"/>
+                  <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domesticSeaKg"/>
                 </div>
-                <SF label="Cobrar handling solo si peso real es menor a (kg)" k="handlingMaxKgSea" min={0} step="0.1"/>
+                <SettingField s={s} setS={setS} label="Cobrar handling solo si peso real es menor a (kg)" k="handlingMaxKgSea" min={0} step="0.1"/>
                 <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso real iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
               <Field label="Tipo de honorarios">
@@ -1588,16 +1593,16 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 </div>
               </Field>
               {s.feeType==="fixed"
-                ? <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                    <SF label="✈️ Avión (USD)" k="feeFixed"/>
-                    <SF label="🚢 Barco m³ (USD)" k="feeFixedSea"/>
-                    <SF label="⚖️ Marítimo kg (USD)" k="feeFixedKg"/>
+                ? <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
+                    <SettingField s={s} setS={setS} label="✈️ Avión (USD)" k="feeFixed"/>
+                    <SettingField s={s} setS={setS} label="🚢 Barco m³ (USD)" k="feeFixedSea"/>
+                    <SettingField s={s} setS={setS} label="⚖️ Marítimo kg (USD)" k="feeFixedKg"/>
                   </div>
                 : <>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-                      <SF label="✈️ Avión (%)" k="feePct" min={0} max={30}/>
-                      <SF label="🚢 Barco m³ (%)" k="feePctSea" min={0} max={30}/>
-                      <SF label="⚖️ Marítimo kg (%)" k="feePctKg" min={0} max={30}/>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
+                      <SettingField s={s} setS={setS} label="✈️ Avión (%)" k="feePct" min={0} max={30}/>
+                      <SettingField s={s} setS={setS} label="🚢 Barco m³ (%)" k="feePctSea" min={0} max={30}/>
+                      <SettingField s={s} setS={setS} label="⚖️ Marítimo kg (%)" k="feePctKg" min={0} max={30}/>
                     </div>
                     <Field label="Calcular % sobre">
                       <select value={s.feeBase||"fob"} onChange={e=>setS(p=>({...p,feeBase:e.target.value}))} style={inputStyle}>
@@ -1655,33 +1660,39 @@ export default function App() {
   const [results,    setResults]   = useState(null);
   const [adminAuth,  setAdminAuth] = useState(false);
 
+  // fetch con timeout: si una fuente no responde en 5s, pasamos a la siguiente
+  const fetchT = (url, ms = 5000) => {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), ms);
+    return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t));
+  };
+
   const fetchDolar = async () => {
     const cfg = ls("fvr_cfg", DEF);
-    if (cfg.manualDolar) { setDolar(cfg.manualDolar); return; }
+    if (cfg.manualDolar) { setDolar(cfg.manualDolar); setDolarErr(false); return; }
     setDolarLoad(true);
+    const ok = (v) => { setDolar(v); setDolarErr(false); setDolarLoad(false); ss("fvr_lastDolar", v); };
     // 1) CriptoYa — dólar oficial Banco Nación venta (mismo valor que DolarHoy)
     try {
-      const res = await fetch("https://criptoya.com/api/dolar");
-      const d   = await res.json();
+      const d = await (await fetchT("https://criptoya.com/api/dolar")).json();
       const venta = d?.oficial?.ask ?? d?.oficial?.price;
-      if (venta) { setDolar(venta); setDolarErr(false); setDolarLoad(false); return; }
+      if (venta) return ok(venta);
       throw new Error();
     } catch {}
     // 2) dolarapi (respaldo)
     try {
-      const res = await fetch("https://dolarapi.com/v1/dolares/oficial");
-      const d   = await res.json();
-      if (d.venta) { setDolar(d.venta); setDolarErr(false); setDolarLoad(false); return; }
+      const d = await (await fetchT("https://dolarapi.com/v1/dolares/oficial")).json();
+      if (d.venta) return ok(d.venta);
       throw new Error();
     } catch {}
     // 3) bluelytics (respaldo)
     try {
-      const res2 = await fetch("https://api.bluelytics.com.ar/v2/latest");
-      const d2   = await res2.json();
-      if (d2?.oficial?.value_sell) { setDolar(d2.oficial.value_sell); setDolarErr(false); setDolarLoad(false); return; }
+      const d2 = await (await fetchT("https://api.bluelytics.com.ar/v2/latest")).json();
+      if (d2?.oficial?.value_sell) return ok(d2.oficial.value_sell);
       throw new Error();
     } catch {
-      setDolarErr(true); setDolar(1450);
+      // Sin conexión a ninguna fuente: usar la última cotización válida guardada
+      setDolarErr(true); setDolar(ls("fvr_lastDolar", 1450));
     }
     setDolarLoad(false);
   };
@@ -1699,7 +1710,19 @@ export default function App() {
 
   const handleCalculate = (d, r) => {
     setFormData(d); setResults(r); setView("results"); track("generated");
-    saveQuote({ id:uid(), date:new Date().toISOString(), client:d.nombre, whatsapp:d.whatsapp, email:d.email, product:d.producto, hsCode:d.hsCode, importType:d.tipo, formData:d, results:r, status:"nuevo" });
+    const nueva = { id:uid(), date:new Date().toISOString(), client:d.nombre, whatsapp:d.whatsapp, email:d.email, product:d.producto, hsCode:d.hsCode, importType:d.tipo, formData:d, results:r, status:"nuevo" };
+    // Si el mismo cliente recalcula el mismo producto dentro de 15 min (ajustando valores),
+    // se ACTUALIZA la última cotización en vez de llenar el panel de duplicados.
+    const prev = quotes[0];
+    const esRecalculo = prev && prev.status === "nuevo"
+      && prev.client === d.nombre && prev.whatsapp === d.whatsapp && prev.product === d.producto
+      && (Date.now() - new Date(prev.date).getTime()) < 15 * 60 * 1000;
+    if (esRecalculo) {
+      const qs = [{ ...nueva, id: prev.id }, ...quotes.slice(1)];
+      setQuotes(qs); ss("fvr_quotes", qs);
+    } else {
+      saveQuote(nueva);
+    }
   };
 
   const handleWhatsApp = () => {

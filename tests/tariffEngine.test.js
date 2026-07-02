@@ -2,15 +2,37 @@ import { describe, it, expect } from "vitest";
 import { classifyCode, classifyProduct, toLegacyShape, TARIFF_SOURCE } from "../src/lib/tariffEngine.js";
 
 describe("classifyCode — precisión por dígitos", () => {
-  it("NCM 8 dígitos → precisión alta, DIE extrazona, con fuente y fecha", () => {
+  it("NCM 8 dígitos → resuelve por la TEC OFICIAL (10.515 posiciones)", () => {
     const r = classifyCode("9304.00.90");
     const c = r.selected;
-    expect(c.dutyRate).toBe(20);                 // airsoft: AEC extrazona (auditado contra VUCE)
-    expect(c.precision).toBe("NCM_8_DIGITS");
+    expect(c.dutyRate).toBe(20);                 // airsoft: AEC extrazona (coincide con VUCE)
+    expect(c.precision).toBe("NCM_8_OFICIAL");
     expect(c.confidence).toBe("high");
     expect(c.dutyType).toBe("DIE_EXTRAZONA");
-    expect(c.source).toBeTruthy();
+    expect(c.source).toMatch(/TEC\/AEC.*oficial/i);
     expect(c.sourceDate).toBe(TARIFF_SOURCE.date);
+  });
+  it("capa 1 — excepciones argentinas: celulares y notebooks 0%, autos 35%", () => {
+    expect(classifyCode("8517.13.00").selected.dutyRate).toBe(0);   // celulares Dec.333/2025 (AEC dice 16)
+    expect(classifyCode("8471.30.12").selected.dutyRate).toBe(0);   // notebooks (AEC dice 16 BIT)
+    expect(classifyCode("8703.23.10").selected.dutyRate).toBe(35);  // autos: régimen automotor (AEC dice 20)
+    expect(classifyCode("8703.23.10").selected.source).toMatch(/argentina/i);
+  });
+  it("capa 2 — Dec. 236/2025: remeras a 20% aunque el AEC oficial diga 35%", () => {
+    const r = classifyCode("6109.10.00");
+    expect(r.selected.dutyRate).toBe(20);
+    expect(r.selected.source).toMatch(/236\/2025/);
+  });
+  it("capa 3 — posición BIT con arancel >0 avisa la posible excepción", () => {
+    const r = classifyCode("8471.60.52"); // periférico BIT del dataset
+    if (r.selected.precision === "NCM_8_OFICIAL" && r.selected.dutyRate > 0) {
+      expect(r.selected.warnings.join(" ")).toMatch(/BIT/i);
+    }
+  });
+  it("capa 3 — posición solo-dataset (no está en la tabla de 4 dígitos interna)", () => {
+    const r = classifyCode("2916.12.30"); // éster químico: cap 29 existe pero valor exacto viene del dataset
+    expect(r.selected.precision).toBe("NCM_8_OFICIAL");
+    expect(typeof r.selected.dutyRate).toBe("number");
   });
   it("HS 6 dígitos → advertencia de incompleto para Argentina", () => {
     const r = classifyCode("640399");

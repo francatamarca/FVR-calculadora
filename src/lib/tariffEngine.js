@@ -16,12 +16,36 @@
    por un JSON importado / API oficial) y actualizar TARIFF_SOURCE. */
 
 import { NCM_RATES, CHAPTER_DESC, CHAPTER_RATES, KEYWORD_RULES } from "./tariffData.js";
+import { NCM8, BIT_SET } from "../data/ncm8.js";
 
 export const TARIFF_SOURCE = {
-  name: "Tabla NCM/AEC interna FVR (auditada contra Dec. 557/2023, Dec. 236/2025 y AEC Mercosur)",
-  shortName: "Tabla NCM/AEC interna",
-  date: "2026-06-18",
+  name: "TEC/AEC Mercosur oficial (Res. Gecex 272/21, act. 10/2025) + excepciones argentinas + tabla interna auditada",
+  shortName: "TEC/AEC oficial + excepciones AR",
+  date: "2026-06-24",
   dutyType: "DIE_EXTRAZONA", // derecho extrazona: lo que paga origen China/USA (NO el DII intrazona Mercosur)
+};
+
+/* ── EXCEPCIONES NACIONALES ARGENTINAS ──────────────────────
+   Aplican POR ENCIMA del AEC oficial (longest-prefix sobre el código):
+   - Informática/telecom: notebooks/tablets (8471.30) y celulares
+     (8517.12/13) a 0% por decretos nacionales 2025/2026 (régimen BIT).
+   - Régimen automotor: autos (8703) al 35%.
+   Textil/calzado (Dec. 236/2025) se maneja por capítulo más abajo. */
+const ARG_OVERRIDES = [
+  ["847130", 0,  "Excepción argentina: informática (notebooks/tablets) 0%"],
+  ["851712", 0,  "Excepción argentina: celulares 0% (Dec. 333/2025)"],
+  ["851713", 0,  "Excepción argentina: celulares 0% (Dec. 333/2025)"],
+  ["8703",   35, "Régimen automotor argentino: 35%"],
+];
+// Dec. 236/2025: Argentina bajó textil/calzado — el AEC oficial (35%) NO aplica.
+// Para estos capítulos manda la tabla interna auditada (ropa/calzado 20%, telas 18%).
+const DEC236_CHAPTERS = new Set(["50","51","52","53","54","55","56","57","58","59","60","61","62","63","64"]);
+
+const argOverrideFor = (digits) => {
+  for (const [prefix, rate, motivo] of ARG_OVERRIDES) {
+    if (digits.startsWith(prefix)) return { rate, motivo };
+  }
+  return null;
 };
 
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -82,8 +106,54 @@ export function classifyCode(raw) {
 
   const p4 = digits.slice(0, 4);
   const p2 = digits.slice(0, 2);
+  const p8 = digits.slice(0, 8);
   const prec = precisionFor(digits.length);
+  const descCap = CHAPTER_DESC[p2] ? `Mercadería del capítulo ${p2}: ${CHAPTER_DESC[p2]}` : "Mercadería clasificada en el NCM";
 
+  // ── CAPA 1: excepciones nacionales argentinas (informática 0%, autos 35%) ──
+  const ov = argOverrideFor(digits);
+  if (ov) {
+    result.productDescription = descCap;
+    result.candidates.push(baseCandidate({
+      code: String(raw), description: descCap, dutyRate: ov.rate,
+      precision: prec.precision, precisionLabel: prec.label, confidence: "high",
+      source: "Excepción nacional argentina", warnings: [ov.motivo, ...prec.warnings],
+    }));
+    result.selected = result.candidates[0];
+    return result;
+  }
+
+  // ── CAPA 2: Dec. 236/2025 (textil/calzado) — manda la tabla argentina auditada ──
+  if (DEC236_CHAPTERS.has(p2) && NCM_RATES[p4] !== undefined) {
+    result.productDescription = descCap;
+    result.candidates.push(baseCandidate({
+      code: String(raw), description: descCap, dutyRate: NCM_RATES[p4],
+      precision: prec.precision, precisionLabel: prec.label, confidence: digits.length >= 8 ? "high" : prec.confidence,
+      source: "Dec. 236/2025 (excepción argentina textil/calzado)",
+      warnings: ["Argentina redujo este sector por Dec. 236/2025 — el AEC Mercosur (35%) no aplica.", ...prec.warnings],
+    }));
+    result.selected = result.candidates[0];
+    return result;
+  }
+
+  // ── CAPA 3: TEC/AEC oficial a 8 dígitos (10.515 posiciones, Res. Gecex 272/21) ──
+  if (digits.length >= 8 && NCM8[p8] !== undefined) {
+    const esBIT = BIT_SET.has(p8);
+    result.productDescription = descCap;
+    result.candidates.push(baseCandidate({
+      code: String(raw), description: descCap, dutyRate: NCM8[p8],
+      precision: "NCM_8_OFICIAL", precisionLabel: "NCM 8 dígitos · TEC oficial",
+      confidence: "high",
+      source: "TEC/AEC Mercosur oficial (Res. Gecex 272/21)",
+      warnings: esBIT && NCM8[p8] > 0
+        ? ["Posición del régimen de informática/telecom (BIT): Argentina suele aplicar 0% — verificar la excepción vigente."]
+        : [],
+    }));
+    result.selected = result.candidates[0];
+    return result;
+  }
+
+  // ── CAPA 4: tabla interna auditada por partida (4 dígitos) ──
   if (digits.length >= 4 && NCM_RATES[p4] !== undefined) {
     const desc = CHAPTER_DESC[p2] ? `Mercadería del capítulo ${p2}: ${CHAPTER_DESC[p2]}` : "Mercadería clasificada en el NCM";
     result.productDescription = desc;

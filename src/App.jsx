@@ -484,6 +484,11 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compac
         <p style={{ color:"#bfdbfe", fontSize:15, maxWidth:560, margin:"0 auto", lineHeight:1.5 }}>
           Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
         </p>
+        <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
+          {["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"].map(c => (
+            <span key={c} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:99, padding:"5px 14px", fontSize:12, color:"#dbeafe", fontWeight:600 }}>{c}</span>
+          ))}
+        </div>
       </div>
     )}
   </header>
@@ -726,13 +731,33 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     setForm(f => ({ ...f, files: names }));
   };
 
-  // ── Extracción automática de factura/packing con IA (/api/document-analyze) ──
+  // ── Extracción automática de factura + packing list (IA) ────
+  // MULTI-DOCUMENTO: cada archivo leído se FUSIONA con lo ya detectado
+  // (la factura aporta producto/valores; el packing aporta pesos/medidas).
+  // Nada se pierde al leer el segundo archivo.
+  const DOC_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+
+  const mergeExtract = (prev, nuevo) => {
+    const out = { ...(prev || {}) };
+    for (const [k, v] of Object.entries(nuevo || {})) {
+      if (v !== null && v !== undefined && v !== "") out[k] = v; // el dato nuevo completa/actualiza
+    }
+    return out;
+  };
+
+  const faltantesDe = (x) => {
+    const f = [];
+    if (!x?.valorTotal && !x?.precioUnitario) f.push("valor FOB");
+    if (!x?.pesoBrutoKg && !x?.pesoNetoKg) f.push("peso");
+    if (!x?.cbmTotal && !(x?.largoCm && x?.anchoCm && x?.altoCm)) f.push("medidas o CBM");
+    return f;
+  };
+
   const extractDoc = async (file) => {
     if (docX.loading) return;
-    const okTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-    if (!okTypes.includes(file.type)) { setDocX({ error: "Para la lectura automática subí PDF, JPG o PNG. (Los demás formatos se adjuntan igual a la consulta.)" }); return; }
-    if (file.size > 3 * 1024 * 1024) { setDocX({ error: "Archivo muy grande para lectura automática (máx. 3 MB)." }); return; }
-    setDocX({ loading: true });
+    if (!DOC_TYPES.includes(file.type)) { setDocX(p => ({ ...p, loading: null, error: "Para la lectura automática subí PDF, JPG o PNG. (Los demás formatos se adjuntan igual a la consulta.)" })); return; }
+    if (file.size > 3 * 1024 * 1024) { setDocX(p => ({ ...p, loading: null, error: "Archivo muy grande para lectura automática (máx. 3 MB)." })); return; }
+    setDocX(p => ({ ...p, loading: file.name, error: null, applied: false }));
     try {
       const dataBase64 = await new Promise((res, rej) => {
         const fr = new FileReader();
@@ -742,13 +767,35 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       });
       const resp = await fetch("/api/document-analyze", {
         method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
-        body: JSON.stringify({ mimeType: file.type, dataBase64 }),
+        body: JSON.stringify({ mimeType: file.type, dataBase64, filename: file.name }),
       });
       const j = await resp.json();
-      if (!resp.ok) { setDocX({ error: j.error || "No se pudo leer el documento." }); return; }
-      setDocX({ data: j.extracted, arancel: j.arancel, faltantes: j.faltantes || [] });
+      if (!resp.ok) { setDocX(p => ({ ...p, loading: null, error: j.error || "No se pudo leer el documento." })); return; }
+      setDocX(p => {
+        const merged = mergeExtract(p.data, j.extracted);
+        return {
+          ...p,
+          loading: null,
+          data: merged,
+          arancel: j.arancel || p.arancel, // el arancel nuevo pisa; si este doc no trajo, se conserva el anterior
+          faltantes: faltantesDe(merged),
+          processed: [...(p.processed || []), file.name],
+          docUrls: j.docUrl ? [...(p.docUrls || []), j.docUrl] : (p.docUrls || []),
+          error: null,
+        };
+      });
     } catch {
-      setDocX({ error: "No se pudo procesar el documento. Cargá los datos manualmente." });
+      setDocX(p => ({ ...p, loading: null, error: "No se pudo procesar el documento. Cargá los datos manualmente." }));
+    }
+  };
+
+  // Lee TODOS los archivos elegibles, uno tras otro, fusionando resultados
+  const extractAll = async () => {
+    for (const f of fileObjs) {
+      if (DOC_TYPES.includes(f.type) && f.size <= 3 * 1024 * 1024) {
+        await extractDoc(f);
+        await new Promise(r => setTimeout(r, 150)); // respiro entre requests
+      }
     }
   };
 
@@ -769,13 +816,14 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       origenSel: origen || (x.paisOrigen ? "otro" : f.origenSel),
       paisOrigen: origen || x.paisOrigen || f.paisOrigen,
       hsCode: x.hsDeclaradoProveedor || f.hsCode,
+      docUrls: docX.docUrls || f.docUrls || [],
       ...(docX.arancel && typeof docX.arancel.dutyRate === "number"
         ? { aiDutyRate: docX.arancel.dutyRate, categoria: "", manualDuty: "", dutyManual: false,
             aiSuggestion: `${docX.arancel.description} — Arancel ${docX.arancel.dutyRate}% (${docX.arancel.source})` }
         : {}),
     }));
     if (docX.arancel) setAiResult(docX.arancel);
-    setDocX({ applied: true });
+    setDocX(p => ({ ...p, data: null, applied: true })); // conserva procesados y docUrls
   };
 
   const seaKg    = form.tipo === "barco" && form.seaMode === "kg";
@@ -794,7 +842,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh} />
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
 
-        <Card icon="👤" title="Tus datos" bg="#eff6ff">
+        <Card icon="👤" title="1 · Tus datos" bg="#eff6ff">
           <div style={rowS}>
             <Field label="Nombre y apellido" required>
               <Inp placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
@@ -810,7 +858,95 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           </Field>
         </Card>
 
-        <Card icon="📦" title="Datos del producto">
+        <Card icon="⚡" title="2 · La forma más rápida: subí tus documentos" bg="#fff7ed">
+          <p style={{ fontSize:13, color:"#475569", marginBottom:12, lineHeight:1.5 }}>
+            ¿Tenés la <strong>factura proforma</strong> o el <strong>packing list</strong> del proveedor?
+            Subilos y <strong style={{ color:"#ea580c" }}>completamos los datos por vos</strong> — sin tipear nada.
+            Si no los tenés, cargá los datos a mano en el paso 3.
+          </p>
+          <label htmlFor="fvr-upload"
+            style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:22,
+              border:"2px dashed #fb923c", borderRadius:14, cursor:"pointer", background:"white",
+              color:"#ea580c", fontSize:13 }}>
+            <span style={{ fontSize:32 }}>📂</span>
+            <span style={{ fontWeight:800 }}>Tocá acá para subir factura y/o packing list</span>
+            <span style={{ fontSize:11, color:"#94a3b8" }}>PDF · JPG · PNG — podés subir los dos juntos</span>
+          </label>
+          <input id="fvr-upload" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            style={{ display:"none" }} onChange={handleFiles} />
+          {fileNames.length > 0 && (
+            <div style={{ marginTop:10 }}>
+              {fileObjs.map((f, i) => {
+                const leido = (docX.processed || []).includes(f.name);
+                const leyendo = docX.loading === f.name;
+                return (
+                  <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, fontSize:12, background: leido ? "#f0fdf4" : "#f8fafc", color: leido ? "#166534" : "#475569", padding:"7px 12px", borderRadius:10, marginBottom:5, border:`1px solid ${leido ? "#86efac" : "#e2e8f0"}`, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:600 }}>{leido ? "✅" : "📄"} {f.name} {leido && <span style={{ fontSize:10, background:"#dcfce7", color:"#15803d", padding:"1px 8px", borderRadius:99, fontWeight:800 }}>LEÍDO</span>}</span>
+                    <button onClick={() => extractDoc(f)} disabled={!!docX.loading}
+                      style={{ padding:"5px 12px", borderRadius:8, border:"none", background: leyendo ? "#e2e8f0" : leido ? "#f1f5f9" : "linear-gradient(135deg,#6d28d9,#7c3aed)", color: leyendo ? "#94a3b8" : leido ? "#64748b" : "white", fontWeight:700, fontSize:11, cursor: docX.loading ? "wait" : "pointer" }}>
+                      {leyendo ? "⏳ Leyendo…" : leido ? "↺ Releer" : "🤖 Leer datos"}
+                    </button>
+                  </div>
+                );
+              })}
+              {fileObjs.filter(f => DOC_TYPES.includes(f.type)).length > 1 && (
+                <button onClick={extractAll} disabled={!!docX.loading}
+                  style={{ width:"100%", marginTop:6, padding:"12px 0", borderRadius:12, border:"none",
+                    background: docX.loading ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
+                    color: docX.loading ? "#94a3b8" : "white", fontWeight:800, fontSize:13, cursor: docX.loading ? "wait" : "pointer" }}>
+                  {docX.loading ? `⏳ Leyendo ${docX.loading}…` : "🤖 Leer TODOS los documentos y completar datos"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {docX.error && (
+            <div style={{ marginTop:10, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:10, fontSize:12, color:"#991b1b" }}>{docX.error}</div>
+          )}
+          {docX.applied && (
+            <div style={{ marginTop:10, background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:10, fontSize:12, color:"#166534" }}>✅ Datos aplicados al formulario — revisalos antes de calcular.</div>
+          )}
+
+          {/* Tabla editable con lo detectado: NADA se aplica sin revisión del usuario */}
+          {docX.data && (
+            <div style={{ marginTop:12, background:"#faf5ff", border:"1px solid #d8b4fe", borderRadius:12, padding:12 }}>
+              <p style={{ fontWeight:800, fontSize:13, color:"#6d28d9", marginBottom:8 }}>🤖 Datos detectados — revisá y editá antes de aplicar</p>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:8 }}>
+                {[["producto","Producto","text"],["cantidad","Cantidad","number"],["precioUnitario","Precio unit. USD","number"],["valorTotal","Valor total USD","number"],
+                  ["pesoBrutoKg","Peso bruto kg","number"],["pesoNetoKg","Peso neto kg","number"],["bultos","Bultos","number"],
+                  ["largoCm","Largo cm","number"],["anchoCm","Ancho cm","number"],["altoCm","Alto cm","number"],["cbmTotal","CBM total","number"],
+                  ["paisOrigen","País origen","text"],["hsDeclaradoProveedor","HS declarado","text"],["proveedor","Proveedor","text"]].map(([k, label, t]) => (
+                  <div key={k}>
+                    <label style={{ fontSize:10, fontWeight:700, color:"#7c3aed", display:"block", marginBottom:2 }}>{label}</label>
+                    <Inp type={t} value={docX.data[k] ?? ""} onChange={e => setDocX(p => ({ ...p, data: { ...p.data, [k]: e.target.value === "" ? null : (t === "number" ? +e.target.value : e.target.value) } }))}
+                      style={{ padding:"7px 9px", fontSize:12 }} />
+                  </div>
+                ))}
+              </div>
+              {docX.data.hsDeclaradoProveedor && (
+                <p style={{ fontSize:11, color:"#b45309", marginTop:8 }}>⚠ El HS Code lo declaró el <strong>proveedor</strong> — suele venir incorrecto; se valida contra la base arancelaria al aplicar.</p>
+              )}
+              {docX.arancel && (
+                <p style={{ fontSize:11, color:"#6d28d9", marginTop:4 }}>📊 Arancel sugerido: <strong>{docX.arancel.dutyRate}%</strong> ({docX.arancel.source}){(docX.arancel.warnings || [])[0] ? ` — ${docX.arancel.warnings[0]}` : ""}</p>
+              )}
+              {docX.faltantes?.length > 0 && (
+                <p style={{ fontSize:11, color:"#b45309", marginTop:4 }}>✍️ Faltan en el documento (cargalos a mano): {docX.faltantes.join(", ")}.</p>
+              )}
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <button onClick={applyExtracted}
+                  style={{ flex:1, padding:"11px 0", borderRadius:10, border:"none", background:"linear-gradient(135deg,#6d28d9,#7c3aed)", color:"white", fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                  ✓ Aplicar al formulario
+                </button>
+                <button onClick={() => setDocX({})}
+                  style={{ padding:"11px 16px", borderRadius:10, border:"2px solid #e2e8f0", background:"white", color:"#64748b", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                  Descartar
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card icon="📦" title="3 · Datos del producto">
           <Field label="Producto" required>
             <div style={{ display:"flex", gap:8 }}>
               <Inp placeholder="Descripción del producto" value={form.producto}
@@ -942,13 +1078,13 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           </Field>
         </Card>
 
-        <Card icon="🌐" title="Tipo de importación" bg="#f0f9ff">
+        <Card icon="🌐" title="4 · Tipo de importación" bg="#f0f9ff">
           <TypeSel value={form.tipo} onChange={v => set("tipo", v)} />
           {form.tipo === "avion" && <SubTipoSel value={form.subTipo} onChange={v => set("subTipo", v)} />}
           {form.tipo === "barco" && <SeaModeSel value={form.seaMode} onChange={v => set("seaMode", v)} />}
         </Card>
 
-        <Card icon="📐" title="Peso y medidas">
+        <Card icon="📐" title="5 · Peso y medidas">
           {form.tipo === "avion" && (
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Medidas del paquete para calcular el <strong>peso volumétrico</strong></p>
@@ -1009,93 +1145,24 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           )}
         </Card>
 
-        <Card icon="📎" title="Documentos (opcional)">
-          <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Adjuntá la <strong>factura proforma</strong> y <strong>packing list</strong> del proveedor.</p>
-          <label htmlFor="fvr-upload"
-            style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:20,
-              border:"2px dashed #7dd3fc", borderRadius:14, cursor:"pointer", background:"white",
-              color:"#0369a1", fontSize:13 }}>
-            <span style={{ fontSize:32 }}>📂</span>
-            <span style={{ fontWeight:700 }}>Clic aquí para adjuntar archivos</span>
-            <span style={{ fontSize:11, color:"#94a3b8" }}>PDF · JPG · PNG · DOC</span>
-          </label>
-          <input id="fvr-upload" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-            style={{ display:"none" }} onChange={handleFiles} />
-          {fileNames.length > 0 && (
-            <div style={{ marginTop:10 }}>
-              {fileObjs.map((f, i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, fontSize:12, background:"#f0fdf4", color:"#166534", padding:"6px 12px", borderRadius:8, marginBottom:4, border:"1px solid #bbf7d0", flexWrap:"wrap" }}>
-                  <span>✅ {f.name}</span>
-                  <button onClick={() => extractDoc(f)} disabled={docX.loading}
-                    style={{ padding:"5px 12px", borderRadius:8, border:"none", background: docX.loading ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)", color: docX.loading ? "#94a3b8" : "white", fontWeight:700, fontSize:11, cursor: docX.loading ? "wait" : "pointer" }}>
-                    {docX.loading ? "⏳ Leyendo…" : "🤖 Extraer datos"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
 
-          {docX.error && (
-            <div style={{ marginTop:10, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:10, fontSize:12, color:"#991b1b" }}>{docX.error}</div>
-          )}
-          {docX.applied && (
-            <div style={{ marginTop:10, background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:10, fontSize:12, color:"#166534" }}>✅ Datos aplicados al formulario — revisalos antes de calcular.</div>
-          )}
-
-          {/* Tabla editable con lo detectado: NADA se aplica sin revisión del usuario */}
-          {docX.data && (
-            <div style={{ marginTop:12, background:"#faf5ff", border:"1px solid #d8b4fe", borderRadius:12, padding:12 }}>
-              <p style={{ fontWeight:800, fontSize:13, color:"#6d28d9", marginBottom:8 }}>🤖 Datos detectados — revisá y editá antes de aplicar</p>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:8 }}>
-                {[["producto","Producto","text"],["cantidad","Cantidad","number"],["precioUnitario","Precio unit. USD","number"],["valorTotal","Valor total USD","number"],
-                  ["pesoBrutoKg","Peso bruto kg","number"],["pesoNetoKg","Peso neto kg","number"],["bultos","Bultos","number"],
-                  ["largoCm","Largo cm","number"],["anchoCm","Ancho cm","number"],["altoCm","Alto cm","number"],["cbmTotal","CBM total","number"],
-                  ["paisOrigen","País origen","text"],["hsDeclaradoProveedor","HS declarado","text"],["proveedor","Proveedor","text"]].map(([k, label, t]) => (
-                  <div key={k}>
-                    <label style={{ fontSize:10, fontWeight:700, color:"#7c3aed", display:"block", marginBottom:2 }}>{label}</label>
-                    <Inp type={t} value={docX.data[k] ?? ""} onChange={e => setDocX(p => ({ ...p, data: { ...p.data, [k]: e.target.value === "" ? null : (t === "number" ? +e.target.value : e.target.value) } }))}
-                      style={{ padding:"7px 9px", fontSize:12 }} />
-                  </div>
-                ))}
-              </div>
-              {docX.data.hsDeclaradoProveedor && (
-                <p style={{ fontSize:11, color:"#b45309", marginTop:8 }}>⚠ El HS Code lo declaró el <strong>proveedor</strong> — suele venir incorrecto; se valida contra la base arancelaria al aplicar.</p>
-              )}
-              {docX.arancel && (
-                <p style={{ fontSize:11, color:"#6d28d9", marginTop:4 }}>📊 Arancel sugerido: <strong>{docX.arancel.dutyRate}%</strong> ({docX.arancel.source}){(docX.arancel.warnings || [])[0] ? ` — ${docX.arancel.warnings[0]}` : ""}</p>
-              )}
-              {docX.faltantes?.length > 0 && (
-                <p style={{ fontSize:11, color:"#b45309", marginTop:4 }}>✍️ Faltan en el documento (cargalos a mano): {docX.faltantes.join(", ")}.</p>
-              )}
-              <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                <button onClick={applyExtracted}
-                  style={{ flex:1, padding:"11px 0", borderRadius:10, border:"none", background:"linear-gradient(135deg,#6d28d9,#7c3aed)", color:"white", fontWeight:800, fontSize:13, cursor:"pointer" }}>
-                  ✓ Aplicar al formulario
-                </button>
-                <button onClick={() => setDocX({})}
-                  style={{ padding:"11px 16px", borderRadius:10, border:"2px solid #e2e8f0", background:"white", color:"#64748b", fontWeight:700, fontSize:12, cursor:"pointer" }}>
-                  Descartar
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
 
         <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:14, marginBottom:20, fontSize:12, color:"#92400e" }}>
           ⚠️ {settings.legal}
         </div>
 
         <button onClick={() => { if (validate()) onCalculate(form, calculate(form, settings)); }}
-          style={{ width:"100%", padding:"16px 0", borderRadius:16, border:"none",
-            background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"white",
-            fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 4px 20px rgba(3,105,161,0.35)" }}>
+          style={{ width:"100%", padding:"17px 0", borderRadius:16, border:"none",
+            background:"linear-gradient(135deg,#ea580c,#f97316)", color:"white",
+            fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 6px 24px rgba(234,88,12,0.4)" }}>
           Calcular mi importación →
         </button>
-        <p style={{ textAlign:"center", fontSize:12, color:"#94a3b8", marginTop:12 }}>Valores en USD · Conversión automática a ARS</p>
+        <p style={{ textAlign:"center", fontSize:12, color:"#94a3b8", marginTop:12 }}>Cotización al instante · Valores en USD y pesos argentinos</p>
       </main>
 
-      <footer style={{ textAlign:"center", padding:"24px 16px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #e2e8f0", marginTop:16 }}>
-        <p style={{ fontWeight:700, color:"#475569", marginBottom:4 }}>FVR Logística Internacional</p>
+      <footer style={{ textAlign:"center", padding:"28px 16px 96px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #e2e8f0", marginTop:16, background:"white" }}>
+        <img src="/logo-fvr.jpg" alt="" style={{ width:44, height:44, borderRadius:10, objectFit:"contain", marginBottom:8 }} />
+        <p style={{ fontWeight:800, color:"#0d2347", marginBottom:4 }}>FVR Logística Internacional</p>
         <p>Francisco Vega · francisco@fvrlogistica.com · +54 9 3883372745</p>
         <div style={{ display:"flex", justifyContent:"center", gap:20, marginTop:8 }}>
           <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>🌐 fvrlogistica.com.ar</a>
@@ -1476,7 +1543,18 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>Email</p><p style={{ fontWeight:700 }}>{q.email || "—"}</p></div>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>HS Code</p><p style={{ fontWeight:700 }}>{q.hsCode || "—"}</p></div>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>País de origen</p><p style={{ fontWeight:700 }}>{q.formData?.paisOrigen || "—"}</p></div>
-            <div style={{ gridColumn:"1/-1" }}><p style={{ fontSize:11, color:"#94a3b8" }}>Archivos</p><p style={{ fontSize:12 }}>{q.formData?.files?.length ? q.formData.files.join(", ") : "Ninguno"}</p></div>
+            <div style={{ gridColumn:"1/-1" }}>
+              <p style={{ fontSize:11, color:"#94a3b8" }}>Documentos</p>
+              {q.formData?.docUrls?.length
+                ? q.formData.docUrls.map((u, i) => (
+                    <a key={i} href={`/api/doc?u=${encodeURIComponent(u)}&k=${encodeURIComponent(sessionStorage.getItem("fvr_admin_key") || "")}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ display:"inline-block", fontSize:12, color:"#0369a1", fontWeight:700, marginRight:12 }}>
+                      📎 {q.formData?.files?.[i] || `Documento ${i + 1}`}
+                    </a>
+                  ))
+                : <p style={{ fontSize:12 }}>{q.formData?.files?.length ? q.formData.files.join(", ") + " (no guardados)" : "Ninguno"}</p>}
+            </div>
           </div>
 
           {/* Detalle de la cotización */}

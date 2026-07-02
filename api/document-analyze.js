@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { mimeType, dataBase64 } = req.body || {};
+  const { mimeType, dataBase64, filename } = req.body || {};
   const blockType = MIME_OK[mimeType];
   if (!blockType) return res.status(400).json({ error: "Formato no soportado. Subí PDF, JPG, PNG o WebP." });
   if (!dataBase64 || typeof dataBase64 !== "string") return res.status(400).json({ error: "Falta el archivo." });
@@ -120,7 +120,21 @@ No inventes valores: si no está en el documento, poné null. No calcules arance
     if (!extracted.pesoBrutoKg && !extracted.pesoNetoKg) faltantes.push("peso");
     if (!extracted.cbmTotal && !(extracted.largoCm && extracted.anchoCm && extracted.altoCm)) faltantes.push("medidas o CBM");
 
-    return res.status(200).json({ ok: true, extracted, arancel, faltantes });
+    // Persistir el documento en Vercel Blob (store privado): el admin lo ve
+    // desde el panel vía /api/doc. Si Blob falla, la extracción sigue igual.
+    let docUrl = null;
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const { put } = await import("@vercel/blob");
+        const safe = String(filename || "documento").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        const ext = mimeType === "application/pdf" ? "" : ""; // el nombre ya trae extensión
+        const blob = await put(`docs/${new Date().toISOString().slice(0, 7)}/${Date.now()}-${safe}${ext}`,
+          Buffer.from(dataBase64, "base64"), { access: "private", contentType: mimeType });
+        docUrl = blob.url;
+      } catch (e) { console.error("blob:", e.message); }
+    }
+
+    return res.status(200).json({ ok: true, extracted, arancel, faltantes, docUrl });
   } catch (e) {
     const aborted = e?.name === "AbortError";
     return res.status(422).json({

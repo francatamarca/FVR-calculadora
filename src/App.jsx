@@ -198,7 +198,7 @@ const buildWAMsg = (d, r, rate, s) => {
     "================================",
     "Total envio (sin producto): *" + USD(r.totalLog) + "*",
     "*TOTAL GENERAL: " + USD(r.totalGen) + "*",
-    r.unitario ? ("Precio unitario estimado (" + r.cantidad + " u.): " + USD(r.unitario)) : "",
+    r.unitario ? ("Precio unitario (" + r.cantidad + " u.): " + USD(r.unitario)) : "",
     rate ? ("En pesos: ARS " + fmt(r.totalGen * rate, 0) + " (dolar $" + fmt(rate) + ")") : "",
     d.files && d.files.length ? ("Archivos adjuntos: " + d.files.join(", ")) : "",
     "",
@@ -217,17 +217,17 @@ const buildShortSummary = (d, r, rate) => {
     ? (d.subTipo === "personal" ? "Aéreo (envío personal)" : "Aéreo")
     : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
   const lines = [
-    `*Estimación de importación — FVR Logística*`,
+    `*Cotización de importación — FVR Logística*`,
     ``,
     `📦 ${d.producto || "Producto"}${d.paisOrigen ? ` (desde ${d.paisOrigen})` : ""}`,
     `🚚 Modalidad: ${tipo}`,
     r.byWeight ? `⚖️ Peso: ${fmt(r.isAir ? r.pFact : r.peso)} kg` : `📐 Volumen: ${fmt(r.m3Fact, 2)} m³`,
     ``,
-    `💵 *Total estimado: ${USD(r.totalGen)}*`,
+    `💵 *Total general: ${USD(r.totalGen)}*`,
     rate ? `🇦🇷 En pesos: ARS ${fmt(r.totalGen * rate, 0)}` : null,
     r.unitario ? `🔢 Por unidad (${r.cantidad} u.): ${USD(r.unitario)}` : null,
     ``,
-    `Incluye flete internacional, impuestos estimados y gestión. Estimación sujeta a validación final.`,
+    `Incluye flete internacional, impuestos y gestión. Sujeto a validación final según documentación y clasificación arancelaria.`,
     `FVR Logística Internacional · +54 9 3883372745`,
   ];
   return lines.filter(v => v !== null && v !== undefined).join("\n");
@@ -393,7 +393,7 @@ const generatePDF = async (d, r, dolar, s) => {
   cursorY = boxY + boxH + 5;
   if (r.unitario) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...accent);
-    doc.text(`Precio unitario estimado (${r.cantidad} unidades): ${USD(r.unitario)}${dolar ? `  ·  ARS ${fmt(r.unitario * dolar, 0)}` : ""}`, M, cursorY);
+    doc.text(`Precio unitario (${r.cantidad} unidades): ${USD(r.unitario)}${dolar ? `  ·  ARS ${fmt(r.unitario * dolar, 0)}` : ""}`, M, cursorY);
     cursorY += 5;
   }
   if (dolar) {
@@ -449,37 +449,43 @@ const WAFloat = () => (
   </a>
 );
 
-/* ── HEADER ──────────────────────────────────────────────── */
-const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar }) => (
-  <header style={{ background: "linear-gradient(135deg,#0a1628 0%,#0d2347 50%,#0a1f42 100%)", color:"white" }}>
-    <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+/* ── HEADER (hero integrado — la calculadora ES la página principal) ── */
+const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compact }) => (
+  <header style={{ background: "linear-gradient(150deg,#0a1628 0%,#0d2347 55%,#123a7a 100%)", color:"white" }}>
+    <div style={{ maxWidth:900, margin:"0 auto", padding:"16px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#38bdf8,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#0c2340", fontSize:13 }}>FVR</div>
+        <img src="/logo-fvr.jpg" alt="FVR Logística Internacional" style={{ width:46, height:46, borderRadius:12, background:"white", padding:3, objectFit:"contain", boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }} />
         <div>
-          <div style={{ fontWeight:700, fontSize:15 }}>FVR Logística Internacional</div>
-          <div style={{ color:"#7dd3fc", fontSize:11 }}>Francisco Vega · fvrlogistica.com.ar</div>
+          <div style={{ fontWeight:800, fontSize:15, letterSpacing:.2 }}>FVR Logística Internacional</div>
+          <div style={{ color:"#93c5fd", fontSize:11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
         </div>
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ color:"#7dd3fc" }}>Dólar oficial:</span>
+          <span style={{ color:"#93c5fd" }}>Dólar oficial:</span>
           <span style={{ fontWeight:700 }}>
             {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}} title="Sin conexión con las fuentes de cotización — se usa la última conocida">{`$${fmt(dolar, 2)} ⚠`}</span> : `$${fmt(dolar, 2)}`}
           </span>
-          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:14 }}>↺</button>
+          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14 }}>↺</button>
         </div>
         <button onClick={onAdmin} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer" }}>
           Panel Admin
         </button>
       </div>
     </div>
-    <div style={{ maxWidth:900, margin:"0 auto", padding:"16px 16px 32px", textAlign:"center" }}>
-      <div style={{ display:"inline-block", background:"rgba(14,165,233,0.2)", border:"1px solid rgba(56,189,248,0.3)", borderRadius:99, padding:"4px 16px", marginBottom:12 }}>
-        <span style={{ color:"#7dd3fc", fontSize:11, fontWeight:700, letterSpacing:2, textTransform:"uppercase" }}>Calculadora de Importaciones</span>
+    {!compact && (
+      <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 34px", textAlign:"center" }}>
+        <div style={{ display:"inline-block", background:"rgba(234,88,12,0.18)", border:"1px solid rgba(251,146,60,0.4)", borderRadius:99, padding:"4px 16px", marginBottom:14 }}>
+          <span style={{ color:"#fdba74", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>Cotizador de importaciones</span>
+        </div>
+        <h1 style={{ fontSize:"clamp(26px, 5.5vw, 36px)", fontWeight:900, marginBottom:10, lineHeight:1.2 }}>
+          Cotizá tu importación de <span style={{ color:"#fdba74" }}>China</span> a Argentina
+        </h1>
+        <p style={{ color:"#bfdbfe", fontSize:15, maxWidth:560, margin:"0 auto", lineHeight:1.5 }}>
+          Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
+        </p>
       </div>
-      <h1 style={{ fontSize:32, fontWeight:900, marginBottom:8 }}>Calculá tu importación en segundos</h1>
-      <p style={{ color:"#7dd3fc", fontSize:15 }}>Cotizá tu producto desde origen hasta tu domicilio con FVR Logística Internacional</p>
-    </div>
+    )}
   </header>
 );
 
@@ -591,111 +597,11 @@ const callAnalyzeAPI = async (type, value) => {
 const analyzeProduct = (producto) => callAnalyzeAPI("product", producto);
 const analyzeHsCode  = (hsCode)   => callAnalyzeAPI("hsCode",  hsCode);
 
-/* ── LANDING PÚBLICA ─────────────────────────────────────────
-   Colores de marca tomados del logo FVR: naranja (carrito/tipografía),
-   azul (globo/avión), verde (continentes). El cliente NO carga datos
-   de contacto acá: primero calcula, el contacto se pide al final. */
+/* ── MARCA FVR ───────────────────────────────────────────────
+   Colores tomados del logo: naranja (carrito/tipografía), azul
+   (globo/avión), verde (continentes). Se usan en el header integrado
+   de la calculadora — que ES la página principal, sin landing previa. */
 const BRAND = { orange: "#ea580c", orangeSoft: "#fff7ed", blue: "#1d4ed8", blueDark: "#0d2347", green: "#16a34a" };
-
-const LandingView = ({ onStart }) => (
-  <div style={{ minHeight: "100vh", background: "white", color: "#1e293b" }}>
-    {/* Hero */}
-    <header style={{ background: `linear-gradient(160deg, ${BRAND.blueDark} 0%, #123a7a 60%, ${BRAND.blue} 100%)`, color: "white", padding: "0 16px 56px" }}>
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "18px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/logo-fvr.jpg" alt="FVR Logística Internacional" style={{ width: 46, height: 46, borderRadius: 12, background: "white", padding: 3, objectFit: "contain" }} />
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>FVR Logística Internacional</div>
-            <div style={{ color: "#93c5fd", fontSize: 11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
-          </div>
-        </div>
-        <a href={`https://wa.me/${WA_NUM}`} target="_blank" rel="noopener noreferrer"
-          style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "white", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
-          💬 WhatsApp
-        </a>
-      </div>
-      <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", paddingTop: 36 }}>
-        <img src="/logo-fvr.jpg" alt="" style={{ width: 92, height: 92, borderRadius: 20, background: "white", padding: 6, objectFit: "contain", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }} />
-        <h1 style={{ fontSize: "clamp(28px, 6vw, 44px)", fontWeight: 900, margin: "22px 0 12px", lineHeight: 1.15 }}>
-          Calculá cuánto te cuesta importar de <span style={{ color: "#fdba74" }}>China</span> a Argentina
-        </h1>
-        <p style={{ color: "#bfdbfe", fontSize: "clamp(15px, 2.5vw, 18px)", maxWidth: 620, margin: "0 auto 30px", lineHeight: 1.5 }}>
-          Estimá costos de importación por aéreo o marítimo, con cálculo automático de peso, volumen, impuestos y logística. Sin registrarte.
-        </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <button onClick={onStart}
-            style={{ background: `linear-gradient(135deg, ${BRAND.orange}, #f97316)`, color: "white", border: "none", borderRadius: 14, padding: "16px 32px", fontSize: 17, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 24px rgba(234,88,12,0.45)" }}>
-            Calcular mi importación →
-          </button>
-          <a href={`https://wa.me/${WA_NUM}?text=${encodeURIComponent("Hola FVR! Quiero consultar por una importación.")}`} target="_blank" rel="noopener noreferrer"
-            style={{ background: "rgba(255,255,255,0.1)", border: "2px solid rgba(255,255,255,0.35)", color: "white", borderRadius: 14, padding: "14px 26px", fontSize: 15, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}>
-            Consultar por WhatsApp
-          </a>
-        </div>
-      </div>
-    </header>
-
-    {/* Beneficios */}
-    <section style={{ maxWidth: 960, margin: "0 auto", padding: "48px 16px 8px" }}>
-      <h2 style={{ textAlign: "center", fontSize: 24, fontWeight: 900, color: BRAND.blueDark, marginBottom: 28 }}>¿Qué hace la calculadora?</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
-        {[
-          { i: "⚡", t: "Cotización en minutos", d: "Estimación completa sin esperar respuesta de nadie." },
-          { i: "⚖️", t: "Peso y volumen automáticos", d: "Peso real, volumétrico y m³ calculados solos." },
-          { i: "✈️🚢", t: "Aéreo vs marítimo", d: "Compará modalidades y elegí la que más te conviene." },
-          { i: "🏛️", t: "Impuestos estimados", d: "Derechos de importación, IVA y costos logísticos incluidos." },
-          { i: "📄", t: "Listo para compartir", d: "Resultado en PDF o WhatsApp, en USD y pesos." },
-        ].map(({ i, t, d }) => (
-          <div key={t} style={{ background: BRAND.orangeSoft, border: "1px solid #fed7aa", borderRadius: 16, padding: 18, textAlign: "center" }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>{i}</div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: BRAND.blueDark, marginBottom: 6 }}>{t}</div>
-            <div style={{ fontSize: 12.5, color: "#64748b", lineHeight: 1.45 }}>{d}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    {/* Cómo funciona */}
-    <section style={{ maxWidth: 960, margin: "0 auto", padding: "44px 16px" }}>
-      <h2 style={{ textAlign: "center", fontSize: 24, fontWeight: 900, color: BRAND.blueDark, marginBottom: 28 }}>Cómo funciona</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-        {[
-          ["1", "Cargá tu producto", "Descripción, valor y datos del envío — o subí la factura del proveedor."],
-          ["2", "Detección automática", "La calculadora estima peso, volumen y el derecho de importación del producto."],
-          ["3", "Elegí la modalidad", "Aéreo, marítimo por kilo o marítimo por m³ — con comparación entre opciones."],
-          ["4", "Recibí tu estimación", "Total claro en USD y ARS, listo para descargar o enviar por WhatsApp."],
-        ].map(([n, t, d]) => (
-          <div key={n} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div style={{ minWidth: 38, height: 38, borderRadius: 12, background: BRAND.blue, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>{n}</div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 14.5, color: BRAND.blueDark, marginBottom: 4 }}>{t}</div>
-              <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>{d}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ textAlign: "center", marginTop: 36 }}>
-        <button onClick={onStart}
-          style={{ background: `linear-gradient(135deg, ${BRAND.orange}, #f97316)`, color: "white", border: "none", borderRadius: 14, padding: "15px 34px", fontSize: 16, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 24px rgba(234,88,12,0.35)" }}>
-          Empezar ahora — es gratis →
-        </button>
-      </div>
-    </section>
-
-    {/* Aviso profesional */}
-    <section style={{ maxWidth: 760, margin: "0 auto", padding: "0 16px 40px" }}>
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: 16, fontSize: 12, color: "#64748b", lineHeight: 1.6, textAlign: "center" }}>
-        ℹ️ Las cotizaciones son <strong>estimativas</strong>: el valor final puede requerir validación según la clasificación arancelaria exacta, la documentación comercial y las condiciones reales del envío. Un asesor de FVR te acompaña en la operación real.
-      </div>
-    </section>
-
-    <footer style={{ textAlign: "center", padding: "22px 16px 96px", fontSize: 12, color: "#94a3b8", borderTop: "1px solid #f1f5f9" }}>
-      <p style={{ fontWeight: 700, color: "#475569", marginBottom: 4 }}>FVR Logística Internacional</p>
-      <p>Francisco Vega · francisco@fvrlogistica.com · +54 9 3883372745</p>
-    </footer>
-    <WAFloat />
-  </div>
-);
 
 /* ── CALCULATOR FORM ─────────────────────────────────────── */
 const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
@@ -768,7 +674,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         categoria: "", manualDuty: "", dutyManual: false,
         hsCode: result.hsCode || f.hsCode,
         aiDutyRate: result.dutyRate ?? null,
-        aiSuggestion: `${result.description} — Arancel estimado: ${result.dutyRate}% (confianza: ${result.confidence})`
+        aiSuggestion: `${result.description} — Derecho de importación: ${result.dutyRate}% (confianza: ${result.confidence})`
       }));
     } catch (e) {
       setAiResult({ error: true });
@@ -798,8 +704,10 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
   const validate = () => {
     const e = {};
-    // Nombre/WhatsApp/email ya NO se piden acá: el cliente primero calcula;
-    // el contacto se solicita recién al descargar PDF / enviar por WhatsApp (menos fricción).
+    // Nombre y WhatsApp son obligatorios ANTES de calcular (seguimiento comercial)
+    if (!form.nombre.trim())  e.nombre  = "Ingresá tu nombre";
+    if (!form.whatsapp.trim()) e.whatsapp = "Ingresá tu WhatsApp";
+    else if (form.whatsapp.replace(/\D/g, "").length < 8) e.whatsapp = "Ingresá un número de WhatsApp válido";
     if (!form.producto.trim()) e.producto = "Requerido";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
     else if (+form.fob > 10000000) e.fob = "Valor demasiado alto — revisalo";
@@ -885,6 +793,22 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
       <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh} />
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
+
+        <Card icon="👤" title="Tus datos" bg="#eff6ff">
+          <div style={rowS}>
+            <Field label="Nombre y apellido" required>
+              <Inp placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+              {errors.nombre && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.nombre}</p>}
+            </Field>
+            <Field label="WhatsApp" required>
+              <Inp placeholder="+54 9 ..." value={form.whatsapp} onChange={e => set("whatsapp", e.target.value)} />
+              {errors.whatsapp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.whatsapp}</p>}
+            </Field>
+          </div>
+          <Field label="Email (opcional)">
+            <Inp type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+          </Field>
+        </Card>
 
         <Card icon="📦" title="Datos del producto">
           <Field label="Producto" required>
@@ -1203,47 +1127,42 @@ const Row = ({ label, usd, dolar, hi, na, note }) => (
 );
 
 /* ── RESULTS VIEW ────────────────────────────────────────── */
-const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWhatsApp, onSaveLead }) => {
+const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, onWhatsApp }) => {
+  // ── Modalidad activa conmutable ─────────────────────────────
+  // Aéreo comercial ↔ marítimo por kilo se comparan entre sí (misma lógica,
+  // cambia la tarifa del flete): el cliente puede alternar SIN recargar datos
+  // y descargar el PDF de cada una. Marítimo por m³ y envío personal quedan
+  // aparte (otra lógica) y no muestran alternativa.
+  const esAereoComercial = d0.tipo === "avion" && d0.subTipo !== "personal";
+  const esBarcoKg = d0.tipo === "barco" && d0.seaMode === "kg";
+  const tieneAlternativa = (esAereoComercial || esBarcoKg) && +d0.peso > 0;
+  const [altMode, setAltMode] = useState(false);
+
+  const d = altMode && tieneAlternativa
+    ? (esAereoComercial ? { ...d0, tipo: "barco", seaMode: "kg" } : { ...d0, tipo: "avion", subTipo: "comercial" })
+    : d0;
+  const r = altMode && tieneAlternativa ? calculate(d, s) : r0;
+  const rAlt = tieneAlternativa
+    ? calculate(esAereoComercial ? { ...d0, tipo: "barco", seaMode: "kg" } : { ...d0, tipo: "avion", subTipo: "comercial" }, s)
+    : null;
+  const sinMedidas = esBarcoKg && !(+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0);
+
   const tipoLabel = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Avión - Envío Personal (Franquicia)" : "Avión - Envío Comercial")
-    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m³");
+    ? (d.subTipo === "personal" ? "Aéreo · Envío Personal (Franquicia)" : "Aéreo Comercial")
+    : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Gate de contacto: el cliente calculó SIN dar sus datos; se piden recién
-  // al querer descargar el PDF o enviar por WhatsApp (ahí se guarda el lead).
-  const [contactGate, setContactGate] = useState(null); // null | "pdf" | "wa"
-  const [contact, setContact] = useState({ nombre: d.nombre || "", whatsapp: d.whatsapp || "", email: d.email || "" });
-  const [contactErr, setContactErr] = useState("");
-  const hasContact = (d.nombre || "").trim() && (d.whatsapp || "").trim();
 
-  const doPDF = async (dd) => {
+  const doPDF = async () => {
     if (pdfLoading) return;
     setPdfLoading(true);
     try {
-      await generatePDF(dd, r, dolar, s);
+      await generatePDF(d, r, dolar, s); // PDF de la modalidad ACTIVA (permite bajar ambas alternando)
     } catch (e) {
       alert("No se pudo generar el PDF. Probá de nuevo en un momento.");
     }
     setPdfLoading(false);
-  };
-
-  const handleAction = (action) => {
-    if (hasContact) {
-      action === "pdf" ? doPDF(d) : onWhatsApp(d);
-    } else {
-      setContactGate(action);
-    }
-  };
-
-  const confirmContact = () => {
-    if (!contact.nombre.trim()) { setContactErr("Ingresá tu nombre."); return; }
-    if (contact.whatsapp.replace(/\D/g, "").length < 8) { setContactErr("Ingresá un WhatsApp válido."); return; }
-    setContactErr("");
-    const dd = onSaveLead(contact); // guarda el lead en el panel y devuelve los datos completos
-    const action = contactGate;
-    setContactGate(null);
-    action === "pdf" ? doPDF(dd) : onWhatsApp(dd);
   };
 
   const copyResumen = async () => {
@@ -1253,7 +1172,8 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
     } catch { alert("No se pudo copiar — seleccioná y copiá el texto manualmente."); }
   };
 
-  const modos = compareModes(d, s);
+  const labelPropia = esAereoComercial ? "✈️ Aéreo comercial" : "🚢 Marítimo por kilo";
+  const labelAlt    = esAereoComercial ? "🚢 Marítimo por kilo" : "✈️ Aéreo comercial";
 
   return (
     <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
@@ -1261,19 +1181,41 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
       {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
 
-        {/* Hero */}
-        <div style={{ background:"linear-gradient(135deg,#0d2347 0%,#0369a1 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(13,35,71,0.35)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+        {/* Selector de modalidad: alterna aéreo comercial ↔ marítimo kg con los mismos datos */}
+        {tieneAlternativa && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+            {[{ alt:false, label:labelPropia, total:r0.totalGen }, { alt:true, label:labelAlt, total:rAlt.totalGen }].map(t => (
+              <button key={String(t.alt)} onClick={() => setAltMode(t.alt)}
+                style={{ padding:"12px 8px", borderRadius:14, cursor:"pointer",
+                  border:`2px solid ${altMode === t.alt ? "#ea580c" : "#e2e8f0"}`,
+                  background: altMode === t.alt ? "#fff7ed" : "white",
+                  boxShadow: altMode === t.alt ? "0 2px 12px rgba(234,88,12,0.15)" : "none" }}>
+                <p style={{ fontWeight:800, fontSize:13, color: altMode === t.alt ? "#ea580c" : "#64748b" }}>{t.label}</p>
+                <p style={{ fontWeight:900, fontSize:16, color: altMode === t.alt ? "#0d2347" : "#94a3b8" }}>{USD(t.total)}</p>
+              </button>
+            ))}
+          </div>
+        )}
+        {altMode && sinMedidas && (
+          <p style={{ fontSize:11, color:"#b45309", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"8px 12px", marginBottom:14 }}>
+            ℹ️ Para el cálculo aéreo no se cargaron medidas: no se consideró el peso volumétrico. Agregalas en el formulario si el paquete es voluminoso.
+          </p>
+        )}
+
+        {/* Card principal — Tu cotización de importación */}
+        <div style={{ background:"linear-gradient(135deg,#0d2347 0%,#1d4ed8 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(13,35,71,0.35)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:10 }}>
             <div>
-              <p style={{ fontSize:11, color:"#7dd3fc", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>{d.nombre ? "Presupuesto para" : "Tu estimación"}</p>
-              <h2 style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>{d.nombre || "Importación estimada"}</h2>
-              <p style={{ fontSize:13, color:"#93c5fd" }}>{d.producto} · {tipoLabel}</p>
+              <p style={{ fontSize:11, color:"#93c5fd", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>Tu cotización de importación</p>
+              <h2 style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>{d.nombre}</h2>
+              <p style={{ fontSize:13, color:"#93c5fd" }}>{d.producto} · <strong style={{ color:"#fdba74" }}>{tipoLabel}</strong></p>
+              {dolar && <p style={{ fontSize:11, color:"#7dd3fc", marginTop:4 }}>Dólar oficial usado: ${fmt(dolar)}</p>}
             </div>
             <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>Total General</p>
-              <p style={{ fontSize:26, fontWeight:900 }}>{USD(r.totalGen)}</p>
-              {dolar && <p style={{ fontSize:13, color:"#93c5fd" }}>{ARS(r.totalGen, dolar)}</p>}
-              {r.unitario && <p style={{ fontSize:12, color:"#7dd3fc", marginTop:2 }}>≈ {USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+              <p style={{ fontSize:11, color:"#93c5fd" }}>Total general</p>
+              <p style={{ fontSize:28, fontWeight:900 }}>{USD(r.totalGen)}</p>
+              {dolar && <p style={{ fontSize:14, color:"#bfdbfe", fontWeight:700 }}>{ARS(r.totalGen, dolar)}</p>}
+              {r.unitario && <p style={{ fontSize:12, color:"#7dd3fc", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, borderTop:"1px solid rgba(255,255,255,0.15)", paddingTop:14 }}>
@@ -1387,81 +1329,52 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
 
-        {/* Totales */}
+        {/* Resumen final — desglose comercial completo */}
         <div style={{ background:"#0d2347", borderRadius:20, overflow:"hidden", boxShadow:"0 4px 24px rgba(13,35,71,0.35)", marginBottom:20 }}>
           <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
-            <p style={{ fontSize:11, color:"white", fontWeight:700, textTransform:"uppercase", letterSpacing:2 }}>Resumen final</p>
+            <p style={{ fontSize:11, color:"white", fontWeight:700, textTransform:"uppercase", letterSpacing:2 }}>Resumen de tu cotización</p>
           </div>
-          <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontSize:13, color:"#bfdbfe" }}>
+            {[
+              ["Valor de los productos (FOB)", r.fob],
+              ["Flete internacional + seguro", r.flete + r.seguro],
+              ["Impuestos y tributos", r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
+              ["Servicios logísticos", r.pickup + r.handling + r.domestic],
+              ["Honorarios de gestión", r.fees],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0" }}>
+                <span>{label}</span><span style={{ fontWeight:700, color:"white" }}>{USD(val)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
-              <p style={{ fontSize:11, color:"#7dd3fc", marginBottom:4 }}>Total envío (sin producto)</p>
+              <p style={{ fontSize:11, color:"#7dd3fc", marginBottom:4 }}>Total del envío (sin producto)</p>
               <p style={{ fontSize:20, fontWeight:700, color:"white" }}>{USD(r.totalLog)}</p>
             </div>
             {dolar && <p style={{ fontSize:14, color:"#93c5fd", fontWeight:600 }}>{ARS(r.totalLog, dolar)}</p>}
           </div>
-          <div style={{ padding:"20px", background:"rgba(14,165,233,0.15)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ padding:"20px", background:"rgba(234,88,12,0.2)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
             <div>
-              <p style={{ fontSize:11, color:"#93c5fd", marginBottom:4 }}>TOTAL GENERAL DE IMPORTACIÓN</p>
+              <p style={{ fontSize:11, color:"#fdba74", marginBottom:4, fontWeight:700 }}>TOTAL GENERAL DE IMPORTACIÓN</p>
               <p style={{ fontSize:28, fontWeight:900, color:"white" }}>{USD(r.totalGen)}</p>
+              {r.unitario && <p style={{ fontSize:12, color:"#fdba74", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
             </div>
             {dolar && <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>Al dólar oficial ${fmt(dolar)}</p>
+              <p style={{ fontSize:11, color:"#fdba74" }}>Al dólar oficial ${fmt(dolar)}</p>
               <p style={{ fontSize:18, fontWeight:700, color:"white" }}>{ARS(r.totalGen, dolar)}</p>
             </div>}
           </div>
         </div>
 
-        {/* Comparador de modalidades */}
-        {modos.length > 1 && (
-          <Card icon="⚖️" title="Comparación de modalidades (estimada)">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12 }}>
-              {modos.map(m => (
-                <div key={m.key} style={{ border:`2px solid ${m.recomendada ? "#16a34a" : "#e2e8f0"}`, borderRadius:14, padding:12, background: m.recomendada ? "#f0fdf4" : "#f8fafc", position:"relative" }}>
-                  {m.recomendada && <span style={{ position:"absolute", top:-10, right:10, background:"#16a34a", color:"white", fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:99 }}>RECOMENDADA</span>}
-                  <p style={{ fontWeight:800, fontSize:13, color:"#0d2347" }}>{m.label}</p>
-                  <p style={{ fontSize:11, color:"#94a3b8", marginBottom:6 }}>{m.key === "aereo" ? "Más rápido" : m.nota}</p>
-                  <p style={{ fontSize:17, fontWeight:900, color: m.recomendada ? "#15803d" : "#334155" }}>{USD(m.r.totalGen)}</p>
-                  {dolar && <p style={{ fontSize:11, color:"#94a3b8" }}>{ARS(m.r.totalGen, dolar)}</p>}
-                  {m.m3Usado && <p style={{ fontSize:10, color:"#94a3b8", marginTop:4 }}>m³ estimado: {fmt(m.m3Usado, 2)}</p>}
-                </div>
-              ))}
-            </div>
-            <p style={{ fontSize:11, color:"#94a3b8", marginTop:10 }}>Comparación con los mismos datos cargados. El aéreo suele ser el más rápido; el marítimo conviene para volumen o bajo apuro.</p>
-          </Card>
-        )}
+        {/* Aclaración única y discreta (sin repetir "estimado" por todos lados) */}
+        <p style={{ fontSize:11, color:"#94a3b8", textAlign:"center", margin:"0 4px 20px", lineHeight:1.5 }}>
+          Valores sujetos a validación final según documentación, clasificación arancelaria, peso/volumen real y tipo de cambio vigente.
+        </p>
 
-        <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:14, marginBottom:20, fontSize:12, color:"#92400e" }}>⚠️ {s.legal}</div>
-
-        {/* Gate de contacto: aparece solo al querer PDF / WhatsApp sin datos */}
-        {contactGate && (
-          <div style={{ background:"white", border:"2px solid #0ea5e9", borderRadius:16, padding:18, marginBottom:16, boxShadow:"0 4px 24px rgba(14,165,233,0.15)" }}>
-            <p style={{ fontWeight:800, fontSize:15, color:"#0d2347", marginBottom:4 }}>
-              {contactGate === "pdf" ? "📄 Un paso más para tu PDF" : "💬 Un paso más para enviar tu cotización"}
-            </p>
-            <p style={{ fontSize:12, color:"#64748b", marginBottom:14 }}>Dejanos tu contacto para {contactGate === "pdf" ? "generar el presupuesto a tu nombre" : "que un asesor pueda responderte"}.</p>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:12, marginBottom:10 }}>
-              <Inp placeholder="Tu nombre y apellido *" value={contact.nombre} onChange={e => setContact(c => ({ ...c, nombre: e.target.value }))} />
-              <Inp placeholder="Tu WhatsApp *" value={contact.whatsapp} onChange={e => setContact(c => ({ ...c, whatsapp: e.target.value }))} />
-            </div>
-            <Inp type="email" placeholder="Email (opcional)" value={contact.email} onChange={e => setContact(c => ({ ...c, email: e.target.value }))} style={{ marginBottom:10 }} />
-            {contactErr && <p style={{ color:"#ef4444", fontSize:12, marginBottom:8 }}>{contactErr}</p>}
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={confirmContact}
-                style={{ flex:1, padding:"13px 0", borderRadius:12, border:"none", background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"white", fontWeight:800, fontSize:14, cursor:"pointer" }}>
-                Continuar →
-              </button>
-              <button onClick={() => setContactGate(null)}
-                style={{ padding:"13px 18px", borderRadius:12, border:"2px solid #e2e8f0", background:"white", color:"#64748b", fontWeight:700, fontSize:13, cursor:"pointer" }}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ACTION BUTTONS */}
+        {/* ACCIONES — Cotización lista para compartir */}
         <div style={{ marginBottom:32 }}>
-          {/* WhatsApp */}
-          <button onClick={() => handleAction("wa")}
+          <button onClick={() => onWhatsApp(d, r)}
             style={{ width:"100%", padding:"16px 0", borderRadius:16, border:"none",
               background:"linear-gradient(135deg,#16a34a,#22c55e)", color:"white",
               fontSize:17, fontWeight:900, cursor:"pointer", marginBottom:12,
@@ -1472,29 +1385,28 @@ const ResultsView = ({ formData: d, results: r, dolar, settings: s, onBack, onWh
           </button>
 
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12 }}>
-            {/* PDF Download */}
-            <button onClick={() => handleAction("pdf")} disabled={pdfLoading}
+            <button onClick={doPDF} disabled={pdfLoading}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #bae6fd",
                 background: pdfLoading ? "#f1f5f9" : "white", color:"#0369a1", fontSize:14, fontWeight:700,
                 cursor: pdfLoading ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-              {pdfLoading ? "⏳ Generando…" : "📄 Descargar PDF"}
+              {pdfLoading ? "⏳ Generando…" : `📄 PDF ${d.tipo === "avion" ? "aéreo" : "marítimo"}`}
             </button>
-            {/* Copiar resumen corto */}
             <button onClick={copyResumen}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #fed7aa",
                 background: copied ? "#f0fdf4" : "white", color: copied ? "#15803d" : "#ea580c", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               {copied ? "✓ Copiado" : "📋 Copiar resumen"}
             </button>
-            {/* Back */}
             <button onClick={onBack}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #e2e8f0",
                 background:"white", color:"#475569", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               ← Nueva consulta
             </button>
           </div>
-          <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
-            El PDF baja listo para compartir · el resumen se copia listo para pegar en WhatsApp
-          </p>
+          {tieneAlternativa && (
+            <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
+              💡 Cambiá de modalidad arriba y descargá también el PDF {d.tipo === "avion" ? "marítimo" : "aéreo"} — sin volver a cargar los datos.
+            </p>
+          )}
         </div>
       </main>
       <WAFloat />
@@ -1690,6 +1602,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
         <div style={{ maxWidth:900, margin:"0 auto", display:"flex", gap:8, overflowX:"auto" }}>
           <button style={navStyle("dashboard")} onClick={() => setTab("dashboard")}>📊 Dashboard</button>
           <button style={navStyle("quotes")} onClick={() => setTab("quotes")}>📋 Presupuestos ({quotes.length})</button>
+          <button style={navStyle("interna")} onClick={() => setTab("interna")}>🧮 Calculadora interna</button>
           <button style={navStyle("settings")} onClick={() => setTab("settings")}>⚙️ Configuración</button>
         </div>
       </div>
@@ -1734,6 +1647,12 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               ? <div style={{ background:"white", borderRadius:16, padding:48, textAlign:"center", color:"#94a3b8" }}><p style={{ fontSize:40, marginBottom:12 }}>📋</p><p>Sin presupuestos</p></div>
               : fq.map(q => <QuoteCard key={q.id} q={q} dolar={dolar} onStatusChange={updateQuoteStatus}/>)
             }
+          </div>
+        )}
+
+        {tab === "interna" && (
+          <div style={{ margin:"-24px -24px 0", borderRadius:16, overflow:"hidden" }}>
+            <InternoView settings={settings} saveSettings={saveSettings} dolar={dolar} fetchDolar={fetchDolar} embedded />
           </div>
         )}
 
@@ -1880,8 +1799,8 @@ const OV_FIELDS = [
   ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
 ];
 
-const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
-  const blank = { producto: "", cantidad: "", fob: "", peso: "", largo: "", ancho: "", alto: "", m3manual: "", bultos: "",
+const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = false }) => {
+  const blank = { producto: "", nombre: "", cantidad: "", fob: "", peso: "", largo: "", ancho: "", alto: "", m3manual: "", bultos: "",
     origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "kg", manualDuty: "", aiDutyRate: null };
   const [d, setD] = useState(blank);
   const [ov, setOv] = useState({});           // overrides temporales de settings (solo esta cotización)
@@ -1900,6 +1819,17 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
   const copy = async (texto, tag) => {
     try { await navigator.clipboard.writeText(texto); setCopied(tag); setTimeout(() => setCopied(""), 2000); }
     catch { alert("No se pudo copiar."); }
+  };
+
+  // PDF de la modalidad activa (cambiando modalidad se descarga la otra al toque)
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const doPDF = async () => {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      await generatePDF({ ...dd, nombre: d.nombre || "Cotización interna", whatsapp: d.whatsapp || "—" }, r, rate, s);
+    } catch { alert("No se pudo generar el PDF."); }
+    setPdfLoading(false);
   };
 
   const detalleTecnico = () => [
@@ -1932,7 +1862,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
             <button onClick={fetchDolar} aria-label="Actualizar dólar" style={{ background: "none", border: "none", color: "#38bdf8", cursor: "pointer", fontSize: 15 }}>↺</button>
             <button onClick={() => { setD(blank); setOv({}); setDolarOv(""); }}
               style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🔄 Reset</button>
-            <a href="/" style={{ color: "#94a3b8", fontSize: 12, textDecoration: "none" }}>← Sitio público</a>
+            {!embedded && <a href="/" style={{ color: "#94a3b8", fontSize: 12, textDecoration: "none" }}>← Sitio público</a>}
           </div>
         </div>
       </div>
@@ -1943,6 +1873,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
           <p style={{ fontWeight: 800, fontSize: 13, color: "#0d2347", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>📦 Datos</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div style={{ gridColumn: "1/-1" }}><Inp placeholder="Producto" value={d.producto} onChange={e => set("producto", e.target.value)} style={inputMini} /></div>
+            <div style={{ gridColumn: "1/-1" }}><Inp placeholder="Cliente (opcional — aparece en el PDF)" value={d.nombre} onChange={e => set("nombre", e.target.value)} style={inputMini} /></div>
             <Inp type="number" placeholder="FOB total USD" value={d.fob} onChange={e => set("fob", e.target.value)} style={inputMini} />
             <Inp type="number" placeholder="Cantidad (u.)" value={d.cantidad} onChange={e => set("cantidad", e.target.value)} style={inputMini} />
             <Inp type="number" placeholder="Peso real kg" value={d.peso} onChange={e => set("peso", e.target.value)} style={inputMini} />
@@ -2037,6 +1968,10 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
               style={{ padding: "13px 0", borderRadius: 12, border: "2px solid rgba(255,255,255,0.25)", background: copied === "tecnico" ? "#22c55e" : "transparent", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
               {copied === "tecnico" ? "✓ Copiado" : "🔧 Copiar detalle técnico"}
             </button>
+            <button onClick={doPDF} disabled={pdfLoading}
+              style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0369a1,#0ea5e9)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
+              {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
+            </button>
           </div>
           <p style={{ fontSize: 11, color: "#64748b", marginTop: 10, textAlign: "center" }}>Nada se guarda automáticamente: esta pantalla es solo para cotizar rápido.</p>
         </div>
@@ -2046,11 +1981,12 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar }) => {
 };
 
 /* ── ROOT ────────────────────────────────────────────────── */
-// Rutas: "/" → landing pública · "/interno" → cotizador rápido interno (con clave)
+// Rutas: "/" → calculadora (ES la página principal, sin landing previa)
+//        "/interno" → cotizador rápido interno (con clave)
 const IS_INTERNO = typeof window !== "undefined" && window.location.pathname.startsWith("/interno");
 
 export default function App() {
-  const [view,       setView]      = useState(IS_INTERNO ? "interno-login" : "landing");
+  const [view,       setView]      = useState(IS_INTERNO ? "interno-login" : "calc");
   const [settings,   setSettings]  = useState(() => ({ ...DEF, ...ls("fvr_cfg", DEF) }));
   const [quotes,     setQuotes]    = useState(() => ls("fvr_quotes",  []));
   const [metrics,    setMetrics]   = useState(() => ls("fvr_metrics", { visits:0, started:0, generated:0, sentWhatsapp:0 }));
@@ -2112,17 +2048,11 @@ export default function App() {
   const updateStatus  = (id, status) => { const qs = quotes.map(q=>q.id===id?{...q,status}:q); setQuotes(qs); ss("fvr_quotes", qs); };
   const track         = (k) => { const m = {...metrics,[k]:metrics[k]+1}; setMetrics(m); ss("fvr_metrics",m); };
 
-  // Calcular ya NO guarda la cotización: el lead se guarda recién cuando el
-  // cliente deja su contacto (PDF/WhatsApp). Menos fricción, panel sin anónimos.
+  // El cliente carga nombre/WhatsApp ANTES de calcular (seguimiento comercial):
+  // la cotización se guarda al calcular, con dedup de recálculos (<15 min).
   const handleCalculate = (d, r) => {
     setFormData(d); setResults(r); setView("results"); track("generated");
-  };
-
-  // Guarda el lead (con dedup de recálculos <15 min) y devuelve los datos completos
-  const saveLead = (contact) => {
-    const d = { ...formData, ...contact };
-    setFormData(d);
-    const nueva = { id:uid(), date:new Date().toISOString(), client:d.nombre, whatsapp:d.whatsapp, email:d.email, product:d.producto, hsCode:d.hsCode, importType:d.tipo, formData:d, results, status:"nuevo" };
+    const nueva = { id:uid(), date:new Date().toISOString(), client:d.nombre, whatsapp:d.whatsapp, email:d.email, product:d.producto, hsCode:d.hsCode, importType:d.tipo, formData:d, results:r, status:"nuevo" };
     const prev = quotes[0];
     const esRecalculo = prev && prev.status === "nuevo"
       && prev.client === d.nombre && prev.whatsapp === d.whatsapp && prev.product === d.producto
@@ -2133,14 +2063,16 @@ export default function App() {
     } else {
       saveQuote(nueva);
     }
-    return d;
   };
 
-  const handleWhatsApp = (dOverride) => {
+  // Acepta overrides de datos/resultados para enviar la modalidad ALTERNATIVA
+  // (ej: calculó aéreo pero está viendo marítimo por kilo) sin recargar nada.
+  const handleWhatsApp = (dOverride, rOverride) => {
     const d = dOverride || formData;
-    if (!results || !d) return;
+    const r = rOverride || results;
+    if (!r || !d) return;
     track("sentWhatsapp");
-    const msg = buildWAMsg(d, results, dolar, settings);
+    const msg = buildWAMsg(d, r, dolar, settings);
     window.open(`https://wa.me/${WA_NUM}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 
@@ -2150,9 +2082,8 @@ export default function App() {
     return <InternoView settings={settings} saveSettings={saveSettings} dolar={dolar} fetchDolar={fetchDolar} />;
   }
 
-  if (view === "landing") return <LandingView onStart={() => setView("calc")} />;
   if (view === "admin-login") return <AdminLogin onLogin={() => { setAdminAuth(true); setView("admin"); }} onBack={() => setView("calc")} />;
   if (view === "admin" && adminAuth) return <AdminPanel settings={settings} saveSettings={saveSettings} quotes={quotes} updateQuoteStatus={updateStatus} metrics={metrics} dolar={dolar} fetchDolar={fetchDolar} onLogout={() => { setAdminAuth(false); setView("calc"); }} />;
-  if (view === "results" && results) return <ResultsView formData={formData} results={results} dolar={dolar} settings={settings} onBack={() => setView("calc")} onWhatsApp={handleWhatsApp} onSaveLead={saveLead} />;
+  if (view === "results" && results) return <ResultsView formData={formData} results={results} dolar={dolar} settings={settings} onBack={() => setView("calc")} onWhatsApp={handleWhatsApp} />;
   return <CalculatorForm settings={settings} onCalculate={handleCalculate} onAdminClick={() => setView("admin-login")} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoad} onRefresh={fetchDolar} onTrackStarted={() => track("started")} />;
 }

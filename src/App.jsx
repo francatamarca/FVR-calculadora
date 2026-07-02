@@ -1417,7 +1417,13 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 /* ── ADMIN LOGIN ─────────────────────────────────────────── */
 const AdminLogin = ({ onLogin, onBack, titulo = "Panel Administrador" }) => {
   const [pass, setPass] = useState(""); const [err, setErr] = useState(false);
-  const go = () => { if (pass === ADMIN_PASS) { setErr(false); onLogin(); } else setErr(true); };
+  const go = () => {
+    if (pass === ADMIN_PASS) {
+      setErr(false);
+      try { sessionStorage.setItem("fvr_admin_key", pass); } catch {} // clave para leer los leads del backend
+      onLogin();
+    } else setErr(true);
+  };
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f0f4f8" }}>
       <div style={{ background:"white", borderRadius:20, boxShadow:"0 4px 32px rgba(0,0,0,0.12)", padding:36, width:"100%", maxWidth:360 }}>
@@ -2045,8 +2051,53 @@ export default function App() {
 
   const saveSettings  = (s) => { setSettings(s); ss("fvr_cfg", s); };
   const saveQuote     = (q) => { const qs = [q,...quotes]; setQuotes(qs); ss("fvr_quotes", qs); };
-  const updateStatus  = (id, status) => { const qs = quotes.map(q=>q.id===id?{...q,status}:q); setQuotes(qs); ss("fvr_quotes", qs); };
   const track         = (k) => { const m = {...metrics,[k]:metrics[k]+1}; setMetrics(m); ss("fvr_metrics",m); };
+
+  // ── Sincronización con el backend de leads (/api/quotes) ──
+  // Cada cotización se envía también a la base central (fire & forget):
+  // si el backend no responde, todo sigue funcionando con localStorage.
+  const syncLeadRemote = (q) => {
+    try {
+      fetch("/api/quotes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...q, origin: "public" }),
+      }).catch(() => {});
+    } catch {}
+  };
+
+  const updateStatus = (id, status) => {
+    const qs = quotes.map(q => q.id === id ? { ...q, status } : q);
+    setQuotes(qs); ss("fvr_quotes", qs);
+    try {
+      fetch("/api/quotes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-key": sessionStorage.getItem("fvr_admin_key") || "" },
+        body: JSON.stringify({ id, status }),
+      }).catch(() => {});
+    } catch {}
+  };
+
+  // Al entrar al panel admin: traer los leads de TODOS los clientes desde el
+  // backend y mezclarlos con los locales (por id; el remoto manda).
+  useEffect(() => {
+    if (!adminAuth) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/quotes", { headers: { "x-admin-key": sessionStorage.getItem("fvr_admin_key") || "" } });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!j?.quotes?.length) return;
+        setQuotes(prev => {
+          const byId = new Map();
+          for (const q of j.quotes) byId.set(q.id, q);
+          for (const q of prev) if (!byId.has(q.id)) byId.set(q.id, q);
+          const merged = [...byId.values()].sort((a, b) => new Date(b.date) - new Date(a.date));
+          ss("fvr_quotes", merged);
+          return merged;
+        });
+      } catch {}
+    })();
+  }, [adminAuth]);
 
   // El cliente carga nombre/WhatsApp ANTES de calcular (seguimiento comercial):
   // la cotización se guarda al calcular, con dedup de recálculos (<15 min).
@@ -2060,8 +2111,10 @@ export default function App() {
     if (esRecalculo) {
       const qs = [{ ...nueva, id: prev.id }, ...quotes.slice(1)];
       setQuotes(qs); ss("fvr_quotes", qs);
+      syncLeadRemote({ ...nueva, id: prev.id }); // upsert remoto con el mismo id
     } else {
       saveQuote(nueva);
+      syncLeadRemote(nueva);
     }
   };
 

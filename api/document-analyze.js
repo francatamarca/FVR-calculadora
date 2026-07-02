@@ -17,6 +17,18 @@ import { classifyCode, classifyProduct, toLegacyShape } from "../src/lib/tariffE
 const MAX_B64 = 4 * 1024 * 1024; // ~3 MB de archivo real
 const MIME_OK = { "application/pdf": "document", "image/jpeg": "image", "image/png": "image", "image/webp": "image" };
 
+// Rate limiting por IP: los documentos consumen más tokens → límite más bajo (10 / 10 min)
+const hits = new Map();
+const rateLimited = (req, max = 10, windowMs = 10 * 60 * 1000) => {
+  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "?";
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || now - h.t0 > windowMs) { hits.set(ip, { t0: now, n: 1 }); return false; }
+  h.n++;
+  if (hits.size > 5000) hits.clear();
+  return h.n > max;
+};
+
 const num = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : null; };
 
 export default async function handler(req, res) {
@@ -26,6 +38,7 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
+  if (rateLimited(req)) return res.status(429).json({ error: "Demasiados documentos seguidos — esperá unos minutos." });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {

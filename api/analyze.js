@@ -13,6 +13,19 @@ import { classifyCode, classifyProduct, toLegacyShape, TARIFF_SOURCE } from "../
 
 const send = (res, flat) => res.status(200).json({ content: [{ text: JSON.stringify(flat) }] });
 
+// Rate limiting simple por IP (en memoria de la instancia): protege la API key
+// de Anthropic contra abuso. 40 consultas / 10 min alcanzan de sobra para uso real.
+const hits = new Map();
+const rateLimited = (req, max = 40, windowMs = 10 * 60 * 1000) => {
+  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "?";
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || now - h.t0 > windowMs) { hits.set(ip, { t0: now, n: 1 }); return false; }
+  h.n++;
+  if (hits.size > 5000) hits.clear(); // tope de memoria
+  return h.n > max;
+};
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -20,6 +33,8 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
+
+  if (rateLimited(req)) return res.status(429).json({ error: "Demasiadas consultas seguidas — esperá unos minutos." });
 
   const { type } = req.body || {};
   let { value } = req.body || {};

@@ -1,23 +1,14 @@
 /* ── CAPA DE PERSISTENCIA ───────────────────────────────────
-   Hoy: adaptador localStorage (cada navegador guarda SOLO lo suyo —
-   las cotizaciones de los clientes NO llegan al panel del dueño).
+   BACKEND ACTIVO (Fase 3, 2026-07-02): además del localStorage local,
+   los leads se sincronizan con /api/quotes (tabla `calculadora_leads`
+   en la base Neon de FVR — la misma de fvr-sourcing, tabla aislada).
+   - POST público al calcular (App.jsx → syncLeadRemote)
+   - GET/PATCH protegidos con header x-admin-key (env QUOTES_ADMIN_KEY)
+   - El panel admin mezcla remoto + local al abrir (remoto manda)
+   - Si el backend no responde, todo sigue con localStorage (fallback)
 
-   Para volverla comercial de verdad, conectar un backend. Interfaz ya
-   desacoplada: implementar los mismos métodos contra Supabase y cambiar
-   el export final.
-
-   TODO backend (recomendado: Supabase, plan free alcanza):
-   1. Crear proyecto en supabase.com → tabla `quotes`:
-      id uuid pk, created_at timestamptz, client text, whatsapp text,
-      email text, product text, hs_code text, import_type text,
-      form_data jsonb, results jsonb, status text, origin text ('public'|'interno')
-   2. Variables en Vercel: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-      (con Row Level Security: INSERT anónimo permitido, SELECT solo
-      con service key desde un endpoint /api/quotes protegido).
-   3. Implementar SupabaseQuotes con los mismos métodos de abajo y
-      exportar ese adaptador. El panel admin lee de /api/quotes.
-   4. Para documentos subidos: Supabase Storage o Vercel Blob
-      (hoy /api/document-analyze procesa en memoria y NO persiste). */
+   Este módulo mantiene el adaptador localStorage (caché/fallback).
+   Pendiente futuro: persistir documentos subidos (Vercel Blob). */
 
 const ls = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const ss = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };

@@ -1195,24 +1195,31 @@ const Row = ({ label, usd, dolar, hi, na, note }) => (
 
 /* ── RESULTS VIEW ────────────────────────────────────────── */
 const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, onWhatsApp }) => {
-  // ── Modalidad activa conmutable ─────────────────────────────
-  // Aéreo comercial ↔ marítimo por kilo se comparan entre sí (misma lógica,
-  // cambia la tarifa del flete): el cliente puede alternar SIN recargar datos
-  // y descargar el PDF de cada una. Marítimo por m³ y envío personal quedan
-  // aparte (otra lógica) y no muestran alternativa.
-  const esAereoComercial = d0.tipo === "avion" && d0.subTipo !== "personal";
-  const esBarcoKg = d0.tipo === "barco" && d0.seaMode === "kg";
-  const tieneAlternativa = (esAereoComercial || esBarcoKg) && +d0.peso > 0;
-  const [altMode, setAltMode] = useState(false);
+  // ── Modalidades conmutables (igual que la calculadora interna) ──
+  // Con los mismos datos el cliente alterna entre aéreo comercial, marítimo
+  // por kilo y marítimo por m³ — este último solo si hay volumen calculable
+  // (m³ manual o medidas L×A×H, multiplicado por bultos). Envío personal
+  // queda aparte (otra lógica, sin comparador).
+  const esPersonal = d0.tipo === "avion" && d0.subTipo === "personal";
+  const bultos = +d0.bultos > 0 ? +d0.bultos : 1;
+  const m3Est = +d0.m3manual > 0
+    ? +d0.m3manual
+    : (+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0)
+      ? (+d0.largo * +d0.ancho * +d0.alto * bultos) / 1000000
+      : 0;
+  const baseKey = d0.tipo === "avion" ? "air" : (d0.seaMode === "kg" ? "seaKg" : "seaM3");
+  const MODES = esPersonal ? [] : [
+    +d0.peso > 0 && { key: "air",   label: "✈️ Aéreo comercial",  pdf: "aéreo",        d: { ...d0, tipo: "avion", subTipo: "comercial" } },
+    +d0.peso > 0 && { key: "seaKg", label: "🚢 Marítimo por kilo", pdf: "marítimo kg",  d: { ...d0, tipo: "barco", seaMode: "kg" } },
+    m3Est > 0    && { key: "seaM3", label: "🚢 Marítimo por m³",   pdf: "marítimo m³",  d: { ...d0, tipo: "barco", seaMode: "m3", m3manual: m3Est } },
+  ].filter(Boolean).map(m => ({ ...m, r: m.key === baseKey ? r0 : calculate(m.d, s) }));
 
-  const d = altMode && tieneAlternativa
-    ? (esAereoComercial ? { ...d0, tipo: "barco", seaMode: "kg" } : { ...d0, tipo: "avion", subTipo: "comercial" })
-    : d0;
-  const r = altMode && tieneAlternativa ? calculate(d, s) : r0;
-  const rAlt = tieneAlternativa
-    ? calculate(esAereoComercial ? { ...d0, tipo: "barco", seaMode: "kg" } : { ...d0, tipo: "avion", subTipo: "comercial" }, s)
-    : null;
-  const sinMedidas = esBarcoKg && !(+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0);
+  const [modeKey, setModeKey] = useState(baseKey);
+  const active = MODES.find(m => m.key === modeKey)
+    || { key: baseKey, d: d0, r: r0, pdf: esPersonal ? "personal" : (d0.tipo === "avion" ? "aéreo" : (d0.seaMode === "kg" ? "marítimo kg" : "marítimo m³")) };
+  const d = active.d, r = active.r;
+  const hayComparador = MODES.length > 1;
+  const sinMedidas = modeKey === "air" && !(+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0);
 
   const tipoLabel = d.tipo === "avion"
     ? (d.subTipo === "personal" ? "Aéreo · Envío Personal (Franquicia)" : "Aéreo Comercial")
@@ -1239,8 +1246,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
     } catch { alert("No se pudo copiar — seleccioná y copiá el texto manualmente."); }
   };
 
-  const labelPropia = esAereoComercial ? "✈️ Aéreo comercial" : "🚢 Marítimo por kilo";
-  const labelAlt    = esAereoComercial ? "🚢 Marítimo por kilo" : "✈️ Aéreo comercial";
+  const hoy = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   return (
     <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
@@ -1248,22 +1254,22 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
       {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
 
-        {/* Selector de modalidad: alterna aéreo comercial ↔ marítimo kg con los mismos datos */}
-        {tieneAlternativa && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-            {[{ alt:false, label:labelPropia, total:r0.totalGen }, { alt:true, label:labelAlt, total:rAlt.totalGen }].map(t => (
-              <button key={String(t.alt)} onClick={() => setAltMode(t.alt)}
-                style={{ padding:"12px 8px", borderRadius:14, cursor:"pointer",
-                  border:`2px solid ${altMode === t.alt ? "#f26c1e" : "#e2e8f0"}`,
-                  background: altMode === t.alt ? "#fff2e9" : "white",
-                  boxShadow: altMode === t.alt ? "0 2px 12px rgba(242,108,30,0.15)" : "none" }}>
-                <p style={{ fontWeight:800, fontSize:13, color: altMode === t.alt ? "#f26c1e" : "#64748b" }}>{t.label}</p>
-                <p style={{ fontWeight:900, fontSize:16, color: altMode === t.alt ? "#0b2f52" : "#94a3b8" }}>{USD(t.total)}</p>
+        {/* Selector de modalidad: las 3 opciones con los mismos datos (como la interna) */}
+        {hayComparador && (
+          <div style={{ display:"grid", gridTemplateColumns:`repeat(${MODES.length}, 1fr)`, gap:8, marginBottom:14 }}>
+            {MODES.map(m => { const on = modeKey === m.key; return (
+              <button key={m.key} onClick={() => setModeKey(m.key)}
+                style={{ padding:"12px 6px", borderRadius:14, cursor:"pointer",
+                  border:`2px solid ${on ? "#f26c1e" : "#e2e8f0"}`,
+                  background: on ? "#fff2e9" : "white",
+                  boxShadow: on ? "0 2px 12px rgba(242,108,30,0.15)" : "none" }}>
+                <p style={{ fontWeight:800, fontSize:12, color: on ? "#d9590f" : "#64748b" }}>{m.label}</p>
+                <p style={{ fontWeight:900, fontSize:15, color: on ? "#15233b" : "#94a3b8" }}>{USD(m.r.totalGen)}</p>
               </button>
-            ))}
+            ); })}
           </div>
         )}
-        {altMode && sinMedidas && (
+        {sinMedidas && baseKey !== "air" && (
           <p style={{ fontSize:11, color:"#b45309", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"8px 12px", marginBottom:14 }}>
             ℹ️ Para el cálculo aéreo no se cargaron medidas: no se consideró el peso volumétrico. Agregalas en el formulario si el paquete es voluminoso.
           </p>
@@ -1397,42 +1403,71 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
 
-        {/* Resumen final — desglose comercial completo */}
-        <div style={{ background:"#0b2f52", borderRadius:20, overflow:"hidden", boxShadow:"0 4px 24px rgba(11,47,82,0.35)", marginBottom:20 }}>
-          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
-            <p style={{ fontSize:11, color:"white", fontWeight:700, textTransform:"uppercase", letterSpacing:2 }}>Resumen de tu cotización</p>
+        {/* Resumen final — presupuesto FVR con desglose explicado */}
+        <div style={{ background:"white", borderRadius:20, overflow:"hidden", border:"1px solid #e6ebf2", boxShadow:"0 8px 30px -12px rgba(22,36,58,0.25)", marginBottom:20 }}>
+          {/* Banda de marca */}
+          <div style={{ background:"linear-gradient(135deg,#0b2f52,#0f3d68 60%,#18548a)", padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:34, height:34, borderRadius:9, background:"linear-gradient(135deg,#f26c1e,#fdb813)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"white", fontSize:11, flexShrink:0 }}>FVR</div>
+              <div>
+                <p style={{ fontSize:14, fontWeight:800, color:"white" }}>Resumen de tu cotización</p>
+                <p style={{ fontSize:11, color:"#b9cee2" }}>{d.producto} · {tipoLabel}</p>
+              </div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>{hoy}</p>
+              <p style={{ fontSize:11, color:"#ffb27a", fontWeight:700 }}>Validez: {s.validezDias || 7} días</p>
+            </div>
           </div>
-          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontSize:13, color:"#dbe8f6" }}>
+
+          {/* Desglose con explicación de cada concepto */}
+          <div style={{ padding:"8px 20px" }}>
             {[
-              ["Valor de los productos (FOB)", r.fob],
-              ["Flete internacional + seguro", r.flete + r.seguro],
-              ["Impuestos y tributos", r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
-              ["Servicios logísticos", r.pickup + r.handling + r.domestic],
-              ["Honorarios de gestión", r.fees],
-            ].map(([label, val]) => (
-              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0" }}>
-                <span>{label}</span><span style={{ fontWeight:700, color:"white" }}>{USD(val)}</span>
+              ["📦", "Valor de tu mercadería", "FOB declarado según factura del proveedor", r.fob],
+              [r.isAir ? "✈️" : "🚢", "Transporte internacional", "Flete y seguro desde origen hasta Argentina", r.flete + r.seguro],
+              ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA e impuestos internos" : (r.isPersonal ? "Derechos de importación e IVA (régimen personal)" : "Derechos de importación, tasa estadística e IVA"), r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
+              ["🚚", "Logística puerta a puerta", "Retiro en origen, handling y envío nacional", r.pickup + r.handling + r.domestic],
+              ["🤝", "Gestión FVR", "Seguimiento y coordinación integral de tu importación", r.fees],
+            ].map(([icon, label, desc, val]) => (
+              <div key={label} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 0", borderBottom:"1px solid #eef2f7" }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:"#eef5fb", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>{icon}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p style={{ fontSize:13, fontWeight:700, color:"#15233b" }}>{label}</p>
+                  <p style={{ fontSize:11, color:"#6b7a90" }}>{desc}</p>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  <p style={{ fontSize:13.5, fontWeight:800, color:"#0f3d68" }}>{USD(val)}</p>
+                  {dolar && <p style={{ fontSize:10.5, color:"#94a3b8" }}>{ARS(val, dolar)}</p>}
+                </div>
               </div>
             ))}
           </div>
-          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div>
-              <p style={{ fontSize:11, color:"#b9cee2", marginBottom:4 }}>Total del envío (sin producto)</p>
-              <p style={{ fontSize:20, fontWeight:700, color:"white" }}>{USD(r.totalLog)}</p>
+
+          {/* Subtotal del servicio */}
+          <div style={{ background:"#f4f7fb", padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+            <p style={{ fontSize:12, fontWeight:700, color:"#475569" }}>Costo del servicio completo (sin tu mercadería)</p>
+            <div style={{ textAlign:"right" }}>
+              <p style={{ fontSize:16, fontWeight:800, color:"#15233b" }}>{USD(r.totalLog)}</p>
+              {dolar && <p style={{ fontSize:11, color:"#6b7a90" }}>{ARS(r.totalLog, dolar)}</p>}
             </div>
-            {dolar && <p style={{ fontSize:14, color:"#b9cee2", fontWeight:600 }}>{ARS(r.totalLog, dolar)}</p>}
           </div>
-          <div style={{ padding:"20px", background:"rgba(242,108,30,0.2)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+
+          {/* Total en gradiente firma FVR */}
+          <div style={{ background:"linear-gradient(135deg,#f26c1e 0%,#f2741b 55%,#fdb813 130%)", padding:"18px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
             <div>
-              <p style={{ fontSize:11, color:"#ffb27a", marginBottom:4, fontWeight:700 }}>TOTAL GENERAL DE IMPORTACIÓN</p>
-              <p style={{ fontSize:28, fontWeight:900, color:"white" }}>{USD(r.totalGen)}</p>
-              {r.unitario && <p style={{ fontSize:12, color:"#ffb27a", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+              <p style={{ fontSize:11, color:"rgba(255,255,255,0.9)", fontWeight:800, letterSpacing:1.5, marginBottom:2 }}>TOTAL FINAL DE TU IMPORTACIÓN</p>
+              <p style={{ fontSize:30, fontWeight:900, color:"white", lineHeight:1.1 }}>{USD(r.totalGen)}</p>
+              {r.unitario && <p style={{ fontSize:12, color:"rgba(255,255,255,0.92)", marginTop:3, fontWeight:600 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
             </div>
             {dolar && <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#ffb27a" }}>Al dólar oficial ${fmt(dolar)}</p>
-              <p style={{ fontSize:18, fontWeight:700, color:"white" }}>{ARS(r.totalGen, dolar)}</p>
+              <p style={{ fontSize:11, color:"rgba(255,255,255,0.9)" }}>En pesos, al dólar oficial ${fmt(dolar)}</p>
+              <p style={{ fontSize:19, fontWeight:800, color:"white" }}>{ARS(r.totalGen, dolar)}</p>
             </div>}
           </div>
+
+          <p style={{ padding:"10px 20px", fontSize:11, color:"#6b7a90", textAlign:"center" }}>
+            Incluye impuestos, transporte internacional y la gestión integral de <strong style={{ color:"#0f3d68" }}>FVR Logística Internacional</strong>.
+          </p>
         </div>
 
         {/* Aclaración única y discreta (sin repetir "estimado" por todos lados) */}
@@ -1457,7 +1492,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #b9cee2",
                 background: pdfLoading ? "#eef2f7" : "white", color:"#0f3d68", fontSize:14, fontWeight:700,
                 cursor: pdfLoading ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-              {pdfLoading ? "⏳ Generando…" : `📄 PDF ${d.tipo === "avion" ? "aéreo" : "marítimo"}`}
+              {pdfLoading ? "⏳ Generando…" : `📄 PDF ${active.pdf}`}
             </button>
             <button onClick={copyResumen}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #ffb27a",
@@ -1470,9 +1505,9 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
               ← Nueva consulta
             </button>
           </div>
-          {tieneAlternativa && (
+          {hayComparador && (
             <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
-              💡 Cambiá de modalidad arriba y descargá también el PDF {d.tipo === "avion" ? "marítimo" : "aéreo"} — sin volver a cargar los datos.
+              💡 Cambiá de modalidad arriba y descargá el PDF de cada una — sin volver a cargar los datos.
             </p>
           )}
         </div>

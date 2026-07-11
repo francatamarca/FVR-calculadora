@@ -1391,7 +1391,8 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 
         <Card icon="🚚" title="Servicios logísticos">
           <Row label="Pick up / Retiro en origen" usd={r.pickup} dolar={dolar} />
-          {r.hasHandling && <Row label="Handling" usd={r.handling} dolar={dolar} />}
+          {r.hasHandling && <Row label="Handling" usd={r.handling} dolar={dolar}
+            note={r.handling === 0 ? `No aplica: el peso supera el umbral de ${(d.tipo === "avion" ? s.handlingMaxKg : s.handlingMaxKgSea) ?? 3} kg` : undefined} />}
           <Row label="Envío nacional" usd={r.domestic} dolar={dolar} />
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
@@ -1879,7 +1880,10 @@ const OV_FIELDS = [
   ["airRateEspana", "Aéreo España (USD/kg)"], ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"],
   ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
   ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up (USD)"], ["handling", "Handling avión (USD)"],
-  ["handlingSea", "Handling marítimo kg (USD)"], ["domestic", "Envío nac. avión (USD)"],
+  ["handlingSea", "Handling marítimo kg (USD)"],
+  ["handlingMaxKg", "Umbral handling avión (se cobra si peso < kg)"],
+  ["handlingMaxKgSea", "Umbral handling marítimo (se cobra si peso < kg)"],
+  ["domestic", "Envío nac. avión (USD)"],
   ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
 ];
 
@@ -2026,7 +2030,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
               <span>Flete: {USD(r.flete)}</span><span>CIF: {USD(r.cif)}</span>
               <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
               <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
-              <span>Handling: {USD(r.handling)}</span><span>Logística total: {USD(r.totalLog)}</span>
+              <span>Handling: {USD(r.handling)}{r.hasHandling && r.handling === 0 ? ` (no aplica: peso ≥ ${d.tipo === "avion" ? (s.handlingMaxKg ?? 3) : (s.handlingMaxKgSea ?? 3)} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
             </div>
           </div>
 

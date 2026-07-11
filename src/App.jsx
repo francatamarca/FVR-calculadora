@@ -244,7 +244,7 @@ const generatePDF = async (d, r, dolar, s) => {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const M = 14;
-  const navy = [13, 35, 71], accent = [3, 105, 161], sky = [56, 189, 248], gray = [100, 116, 139];
+  const navy = [11, 47, 82], accent = [24, 84, 138], sky = [242, 108, 30], gray = [100, 116, 139];
 
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0"), mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -421,10 +421,10 @@ const generatePDF = async (d, r, dolar, s) => {
 
 /* ── STATUS ──────────────────────────────────────────────── */
 const STATUS_MAP = {
-  nuevo:       { label: "Nuevo",       bg: "#e0f2fe", fg: "#0369a1" },
+  nuevo:       { label: "Nuevo",       bg: "#dbe8f6", fg: "#0f3d68" },
   en_analisis: { label: "En análisis", bg: "#fef3c7", fg: "#b45309" },
   respondido:  { label: "Respondido",  bg: "#dcfce7", fg: "#15803d" },
-  cerrado:     { label: "Cerrado",     bg: "#f1f5f9", fg: "#64748b" },
+  cerrado:     { label: "Cerrado",     bg: "#eef2f7", fg: "#64748b" },
 };
 const Badge = ({ status }) => {
   const s = STATUS_MAP[status] || STATUS_MAP.nuevo;
@@ -442,7 +442,7 @@ const WAIcon = ({ size = 28 }) => (
 const WAFloat = () => (
   <a href={`https://wa.me/${WA_NUM}`} target="_blank" rel="noopener noreferrer"
     style={{ position:"fixed", bottom:24, right:24, zIndex:9999,
-      background:"#22c55e", borderRadius:"50%", width:56, height:56,
+      background:"#25d366", borderRadius:"50%", width:56, height:56,
       display:"flex", alignItems:"center", justifyContent:"center",
       boxShadow:"0 4px 24px rgba(0,0,0,0.25)", textDecoration:"none", color:"white" }}>
     <WAIcon />
@@ -451,22 +451,22 @@ const WAFloat = () => (
 
 /* ── HEADER (hero integrado — la calculadora ES la página principal) ── */
 const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compact }) => (
-  <header style={{ background: "linear-gradient(150deg,#0a1628 0%,#0d2347 55%,#123a7a 100%)", color:"white" }}>
+  <header style={{ background: "linear-gradient(150deg,#0b2f52 0%,#0f3d68 55%,#18548a 100%)", color:"white" }}>
     <div style={{ maxWidth:900, margin:"0 auto", padding:"16px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         <img src="/logo-fvr.jpg" alt="FVR Logística Internacional" style={{ width:46, height:46, borderRadius:12, background:"white", padding:3, objectFit:"contain", boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }} />
         <div>
           <div style={{ fontWeight:800, fontSize:15, letterSpacing:.2 }}>FVR Logística Internacional</div>
-          <div style={{ color:"#93c5fd", fontSize:11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
+          <div style={{ color:"#b9cee2", fontSize:11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
         </div>
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ color:"#93c5fd" }}>Dólar oficial:</span>
+          <span style={{ color:"#b9cee2" }}>Dólar oficial:</span>
           <span style={{ fontWeight:700 }}>
             {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}} title="Sin conexión con las fuentes de cotización — se usa la última conocida">{`$${fmt(dolar, 2)} ⚠`}</span> : `$${fmt(dolar, 2)}`}
           </span>
-          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14 }}>↺</button>
+          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#b9cee2", cursor:"pointer", fontSize:14 }}>↺</button>
         </div>
         <button onClick={onAdmin} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer" }}>
           Panel Admin
@@ -475,18 +475,18 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compac
     </div>
     {!compact && (
       <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 34px", textAlign:"center" }}>
-        <div style={{ display:"inline-block", background:"rgba(234,88,12,0.18)", border:"1px solid rgba(251,146,60,0.4)", borderRadius:99, padding:"4px 16px", marginBottom:14 }}>
-          <span style={{ color:"#fdba74", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>Cotizador de importaciones</span>
+        <div style={{ display:"inline-block", background:"rgba(242,108,30,0.18)", border:"1px solid rgba(251,146,60,0.4)", borderRadius:99, padding:"4px 16px", marginBottom:14 }}>
+          <span style={{ color:"#ffb27a", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>Cotizador de importaciones</span>
         </div>
         <h1 style={{ fontSize:"clamp(26px, 5.5vw, 36px)", fontWeight:900, marginBottom:10, lineHeight:1.2 }}>
-          Cotizá tu importación de <span style={{ color:"#fdba74" }}>China</span> a Argentina
+          Cotizá tu importación de <span style={{ color:"#ffb27a" }}>China</span> a Argentina
         </h1>
-        <p style={{ color:"#bfdbfe", fontSize:15, maxWidth:560, margin:"0 auto", lineHeight:1.5 }}>
+        <p style={{ color:"#dbe8f6", fontSize:15, maxWidth:560, margin:"0 auto", lineHeight:1.5 }}>
           Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
         </p>
         <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
           {["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"].map(c => (
-            <span key={c} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:99, padding:"5px 14px", fontSize:12, color:"#dbeafe", fontWeight:600 }}>{c}</span>
+            <span key={c} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:99, padding:"5px 14px", fontSize:12, color:"#dbe8f6", fontWeight:600 }}>{c}</span>
           ))}
         </div>
       </div>
@@ -496,8 +496,8 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compac
 
 /* ── UI PRIMITIVES ───────────────────────────────────────── */
 const Card = ({ icon, title, bg, children }) => (
-  <div style={{ background:"white", borderRadius:16, boxShadow:"0 1px 4px rgba(0,0,0,0.07)", border:"1px solid #f1f5f9", overflow:"hidden", marginBottom:16 }}>
-    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 20px", borderBottom:"1px solid #f1f5f9", background: bg || "#f8fafc" }}>
+  <div style={{ background:"white", borderRadius:16, boxShadow:"0 1px 4px rgba(0,0,0,0.07)", border:"1px solid #eef2f7", overflow:"hidden", marginBottom:16 }}>
+    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 20px", borderBottom:"1px solid #eef2f7", background: bg || "#f8fafc" }}>
       <span style={{ fontSize:18 }}>{icon}</span>
       <span style={{ fontWeight:700, fontSize:12, textTransform:"uppercase", letterSpacing:1, color:"#334155" }}>{title}</span>
     </div>
@@ -515,7 +515,7 @@ const Field = ({ label, required, hint, children }) => (
   </div>
 );
 
-const inputStyle = { width:"100%", border:"1px solid #e2e8f0", borderRadius:12, padding:"10px 14px", fontSize:14, color:"#1e293b", background:"#f8fafc", outline:"none", boxSizing:"border-box" };
+const inputStyle = { width:"100%", border:"1px solid #e2e8f0", borderRadius:12, padding:"10px 14px", fontSize:14, color:"#15233b", background:"#f8fafc", outline:"none", boxSizing:"border-box" };
 
 const Inp = ({ type="text", placeholder, value, onChange, style={}, ...rest }) => (
   <input type={type} placeholder={placeholder} value={value} onChange={onChange}
@@ -527,12 +527,12 @@ const TypeSel = ({ value, onChange }) => (
   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
     {[{ v:"avion", icon:"✈️", label:"Avión" }, { v:"barco", icon:"🚢", label:"Barco" }].map(({ v, icon, label }) => (
       <button key={v} onClick={() => onChange(v)} type="button"
-        style={{ padding:"20px 12px", borderRadius:16, border:`2px solid ${value===v?"#0ea5e9":"#e2e8f0"}`,
-          background: value===v ? "#f0f9ff" : "#f8fafc", cursor:"pointer",
+        style={{ padding:"20px 12px", borderRadius:16, border:`2px solid ${value===v?"#18548a":"#e2e8f0"}`,
+          background: value===v ? "#eef5fb" : "#f8fafc", cursor:"pointer",
           display:"flex", flexDirection:"column", alignItems:"center", gap:6,
-          boxShadow: value===v ? "0 2px 12px rgba(14,165,233,0.15)" : "none" }}>
+          boxShadow: value===v ? "0 2px 12px rgba(24,84,138,0.15)" : "none" }}>
         <span style={{ fontSize:36 }}>{icon}</span>
-        <span style={{ fontWeight:700, fontSize:14, color: value===v ? "#0369a1" : "#334155" }}>{label}</span>
+        <span style={{ fontWeight:700, fontSize:14, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
       </button>
     ))}
   </div>
@@ -544,12 +544,12 @@ const SubTipoSel = ({ value, onChange }) => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
       {[{ v:"comercial", icon:"🏢", label:"Envío Comercial" }, { v:"personal", icon:"👤", label:"Envío Personal" }].map(({ v, icon, label }) => (
         <button key={v} onClick={() => onChange(v)} type="button"
-          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#0ea5e9":"#e2e8f0"}`,
-            background: value===v ? "#f0f9ff" : "#f8fafc", cursor:"pointer",
+          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#18548a":"#e2e8f0"}`,
+            background: value===v ? "#eef5fb" : "#f8fafc", cursor:"pointer",
             display:"flex", alignItems:"center", gap:10,
-            boxShadow: value===v ? "0 2px 10px rgba(14,165,233,0.12)" : "none" }}>
+            boxShadow: value===v ? "0 2px 10px rgba(24,84,138,0.12)" : "none" }}>
           <span style={{ fontSize:22 }}>{icon}</span>
-          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0369a1" : "#334155" }}>{label}</span>
+          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
         </button>
       ))}
     </div>
@@ -567,17 +567,17 @@ const SeaModeSel = ({ value, onChange }) => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
       {[{ v:"m3", icon:"📦", label:"Por m³" }, { v:"kg", icon:"⚖️", label:"Por kilo" }].map(({ v, icon, label }) => (
         <button key={v} onClick={() => onChange(v)} type="button"
-          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#0ea5e9":"#e2e8f0"}`,
-            background: value===v ? "#f0f9ff" : "#f8fafc", cursor:"pointer",
+          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#18548a":"#e2e8f0"}`,
+            background: value===v ? "#eef5fb" : "#f8fafc", cursor:"pointer",
             display:"flex", alignItems:"center", gap:10,
-            boxShadow: value===v ? "0 2px 10px rgba(14,165,233,0.12)" : "none" }}>
+            boxShadow: value===v ? "0 2px 10px rgba(24,84,138,0.12)" : "none" }}>
           <span style={{ fontSize:22 }}>{icon}</span>
-          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0369a1" : "#334155" }}>{label}</span>
+          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
         </button>
       ))}
     </div>
     {value === "kg" && (
-      <div style={{ marginTop:10, background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:12, fontSize:12, color:"#0369a1" }}>
+      <div style={{ marginTop:10, background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12, fontSize:12, color:"#0f3d68" }}>
         <strong>⚖️ Marítimo por kilo:</strong> se cobra por el <strong>peso real</strong> (no se usan medidas ni peso volumétrico).
       </div>
     )}
@@ -606,7 +606,7 @@ const analyzeHsCode  = (hsCode)   => callAnalyzeAPI("hsCode",  hsCode);
    Colores tomados del logo: naranja (carrito/tipografía), azul
    (globo/avión), verde (continentes). Se usan en el header integrado
    de la calculadora — que ES la página principal, sin landing previa. */
-const BRAND = { orange: "#ea580c", orangeSoft: "#fff7ed", blue: "#1d4ed8", blueDark: "#0d2347", green: "#16a34a" };
+const BRAND = { orange: "#f26c1e", orangeSoft: "#fff2e9", blue: "#18548a", blueDark: "#0b2f52", green: "#16a34a" };
 
 /* ── CALCULATOR FORM ─────────────────────────────────────── */
 const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
@@ -838,11 +838,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const rowS = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:16 };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
+    <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
       <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh} />
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
 
-        <Card icon="👤" title="1 · Tus datos" bg="#eff6ff">
+        <Card icon="👤" title="1 · Tus datos" bg="#eef5fb">
           <div style={rowS}>
             <Field label="Nombre y apellido" required>
               <Inp placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
@@ -858,16 +858,16 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           </Field>
         </Card>
 
-        <Card icon="⚡" title="2 · La forma más rápida: subí tus documentos" bg="#fff7ed">
+        <Card icon="⚡" title="2 · La forma más rápida: subí tus documentos" bg="#fff2e9">
           <p style={{ fontSize:13, color:"#475569", marginBottom:12, lineHeight:1.5 }}>
             ¿Tenés la <strong>factura proforma</strong> o el <strong>packing list</strong> del proveedor?
-            Subilos y <strong style={{ color:"#ea580c" }}>completamos los datos por vos</strong> — sin tipear nada.
+            Subilos y <strong style={{ color:"#f26c1e" }}>completamos los datos por vos</strong> — sin tipear nada.
             Si no los tenés, cargá los datos a mano en el paso 3.
           </p>
           <label htmlFor="fvr-upload"
             style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:22,
-              border:"2px dashed #fb923c", borderRadius:14, cursor:"pointer", background:"white",
-              color:"#ea580c", fontSize:13 }}>
+              border:"2px dashed #f2741b", borderRadius:14, cursor:"pointer", background:"white",
+              color:"#f26c1e", fontSize:13 }}>
             <span style={{ fontSize:32 }}>📂</span>
             <span style={{ fontWeight:800 }}>Tocá acá para subir factura y/o packing list</span>
             <span style={{ fontSize:11, color:"#94a3b8" }}>PDF · JPG · PNG — podés subir los dos juntos</span>
@@ -883,7 +883,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                   <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, fontSize:12, background: leido ? "#f0fdf4" : "#f8fafc", color: leido ? "#166534" : "#475569", padding:"7px 12px", borderRadius:10, marginBottom:5, border:`1px solid ${leido ? "#86efac" : "#e2e8f0"}`, flexWrap:"wrap" }}>
                     <span style={{ fontWeight:600 }}>{leido ? "✅" : "📄"} {f.name} {leido && <span style={{ fontSize:10, background:"#dcfce7", color:"#15803d", padding:"1px 8px", borderRadius:99, fontWeight:800 }}>LEÍDO</span>}</span>
                     <button onClick={() => extractDoc(f)} disabled={!!docX.loading}
-                      style={{ padding:"5px 12px", borderRadius:8, border:"none", background: leyendo ? "#e2e8f0" : leido ? "#f1f5f9" : "linear-gradient(135deg,#6d28d9,#7c3aed)", color: leyendo ? "#94a3b8" : leido ? "#64748b" : "white", fontWeight:700, fontSize:11, cursor: docX.loading ? "wait" : "pointer" }}>
+                      style={{ padding:"5px 12px", borderRadius:8, border:"none", background: leyendo ? "#e2e8f0" : leido ? "#eef2f7" : "linear-gradient(135deg,#18548a,#1e6fb0)", color: leyendo ? "#94a3b8" : leido ? "#64748b" : "white", fontWeight:700, fontSize:11, cursor: docX.loading ? "wait" : "pointer" }}>
                       {leyendo ? "⏳ Leyendo…" : leido ? "↺ Releer" : "🤖 Leer datos"}
                     </button>
                   </div>
@@ -892,7 +892,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {fileObjs.filter(f => DOC_TYPES.includes(f.type)).length > 1 && (
                 <button onClick={extractAll} disabled={!!docX.loading}
                   style={{ width:"100%", marginTop:6, padding:"12px 0", borderRadius:12, border:"none",
-                    background: docX.loading ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
+                    background: docX.loading ? "#e2e8f0" : "linear-gradient(135deg,#18548a,#1e6fb0)",
                     color: docX.loading ? "#94a3b8" : "white", fontWeight:800, fontSize:13, cursor: docX.loading ? "wait" : "pointer" }}>
                   {docX.loading ? `⏳ Leyendo ${docX.loading}…` : "🤖 Leer TODOS los documentos y completar datos"}
                 </button>
@@ -909,15 +909,15 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
           {/* Tabla editable con lo detectado: NADA se aplica sin revisión del usuario */}
           {docX.data && (
-            <div style={{ marginTop:12, background:"#faf5ff", border:"1px solid #d8b4fe", borderRadius:12, padding:12 }}>
-              <p style={{ fontWeight:800, fontSize:13, color:"#6d28d9", marginBottom:8 }}>🤖 Datos detectados — revisá y editá antes de aplicar</p>
+            <div style={{ marginTop:12, background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12 }}>
+              <p style={{ fontWeight:800, fontSize:13, color:"#0f3d68", marginBottom:8 }}>🤖 Datos detectados — revisá y editá antes de aplicar</p>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:8 }}>
                 {[["producto","Producto","text"],["cantidad","Cantidad","number"],["precioUnitario","Precio unit. USD","number"],["valorTotal","Valor total USD","number"],
                   ["pesoBrutoKg","Peso bruto kg","number"],["pesoNetoKg","Peso neto kg","number"],["bultos","Bultos","number"],
                   ["largoCm","Largo cm","number"],["anchoCm","Ancho cm","number"],["altoCm","Alto cm","number"],["cbmTotal","CBM total","number"],
                   ["paisOrigen","País origen","text"],["hsDeclaradoProveedor","HS declarado","text"],["proveedor","Proveedor","text"]].map(([k, label, t]) => (
                   <div key={k}>
-                    <label style={{ fontSize:10, fontWeight:700, color:"#7c3aed", display:"block", marginBottom:2 }}>{label}</label>
+                    <label style={{ fontSize:10, fontWeight:700, color:"#18548a", display:"block", marginBottom:2 }}>{label}</label>
                     <Inp type={t} value={docX.data[k] ?? ""} onChange={e => setDocX(p => ({ ...p, data: { ...p.data, [k]: e.target.value === "" ? null : (t === "number" ? +e.target.value : e.target.value) } }))}
                       style={{ padding:"7px 9px", fontSize:12 }} />
                   </div>
@@ -927,14 +927,14 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                 <p style={{ fontSize:11, color:"#b45309", marginTop:8 }}>⚠ El HS Code lo declaró el <strong>proveedor</strong> — suele venir incorrecto; se valida contra la base arancelaria al aplicar.</p>
               )}
               {docX.arancel && (
-                <p style={{ fontSize:11, color:"#6d28d9", marginTop:4 }}>📊 Arancel sugerido: <strong>{docX.arancel.dutyRate}%</strong> ({docX.arancel.source}){(docX.arancel.warnings || [])[0] ? ` — ${docX.arancel.warnings[0]}` : ""}</p>
+                <p style={{ fontSize:11, color:"#0f3d68", marginTop:4 }}>📊 Arancel sugerido: <strong>{docX.arancel.dutyRate}%</strong> ({docX.arancel.source}){(docX.arancel.warnings || [])[0] ? ` — ${docX.arancel.warnings[0]}` : ""}</p>
               )}
               {docX.faltantes?.length > 0 && (
                 <p style={{ fontSize:11, color:"#b45309", marginTop:4 }}>✍️ Faltan en el documento (cargalos a mano): {docX.faltantes.join(", ")}.</p>
               )}
               <div style={{ display:"flex", gap:8, marginTop:10 }}>
                 <button onClick={applyExtracted}
-                  style={{ flex:1, padding:"11px 0", borderRadius:10, border:"none", background:"linear-gradient(135deg,#6d28d9,#7c3aed)", color:"white", fontWeight:800, fontSize:13, cursor:"pointer" }}>
+                  style={{ flex:1, padding:"11px 0", borderRadius:10, border:"none", background:"linear-gradient(135deg,#18548a,#1e6fb0)", color:"white", fontWeight:800, fontSize:13, cursor:"pointer" }}>
                   ✓ Aplicar al formulario
                 </button>
                 <button onClick={() => setDocX({})}
@@ -952,7 +952,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               <Inp placeholder="Descripción del producto" value={form.producto}
                 onChange={e => set("producto", e.target.value)} style={{ flex:1 }} />
               <button onClick={handleAnalyzeProduct} disabled={aiLoading === "product" || !form.producto.trim()} aria-label="Analizar producto con IA"
-                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#e2e8f0" : "linear-gradient(135deg,#0369a1,#0ea5e9)",
+                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#e2e8f0" : "linear-gradient(135deg,#0f3d68,#18548a)",
                   color: aiLoading === "product" ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading === "product" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
                 {aiLoading === "product" ? "⏳ Analizando…" : "🤖 Analizar IA"}
               </button>
@@ -981,9 +981,9 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                     {matches.map(c => (
                       <button key={c.label} type="button"
                         onMouseDown={() => { handleCategoria(c.label); setCatQuery(c.label); setCatOpen(false); }}
-                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", textAlign:"left", padding:"10px 14px", border:"none", borderBottom:"1px solid #f1f5f9", background:"white", cursor:"pointer", fontSize:13, color:"#334155" }}>
+                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", textAlign:"left", padding:"10px 14px", border:"none", borderBottom:"1px solid #eef2f7", background:"white", cursor:"pointer", fontSize:13, color:"#334155" }}>
                         <span>{c.label}</span>
-                        <span style={{ fontWeight:700, color:"#0369a1", fontSize:12, flexShrink:0, marginLeft:10 }}>{c.rate}%</span>
+                        <span style={{ fontWeight:700, color:"#0f3d68", fontSize:12, flexShrink:0, marginLeft:10 }}>{c.rate}%</span>
                       </button>
                     ))}
                   </div>
@@ -1027,7 +1027,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                 <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} style={{ flex:1 }} />
                 <button onClick={handleAnalyzeHsCode} disabled={aiLoading === "hs" || !form.hsCode.trim()} title="Buscar arancel por HS Code" aria-label="Buscar arancel por HS Code"
                   style={{ padding:"0 10px", borderRadius:10, border:"none",
-                    background: aiLoading === "hs" ? "#e2e8f0" : "linear-gradient(135deg,#6d28d9,#7c3aed)",
+                    background: aiLoading === "hs" ? "#e2e8f0" : "linear-gradient(135deg,#18548a,#1e6fb0)",
                     color: aiLoading === "hs" ? "#94a3b8" : "white", fontWeight:700, fontSize:13,
                     cursor: aiLoading === "hs" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
                   {aiLoading === "hs" ? "⏳" : "🔍"}
@@ -1078,7 +1078,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           </Field>
         </Card>
 
-        <Card icon="🌐" title="4 · Tipo de importación" bg="#f0f9ff">
+        <Card icon="🌐" title="4 · Tipo de importación" bg="#eef5fb">
           <TypeSel value={form.tipo} onChange={v => set("tipo", v)} />
           {form.tipo === "avion" && <SubTipoSel value={form.subTipo} onChange={v => set("subTipo", v)} />}
           {form.tipo === "barco" && <SeaModeSel value={form.seaMode} onChange={v => set("seaMode", v)} />}
@@ -1123,22 +1123,22 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           </div>
 
           {form.tipo === "avion" && form.largo && form.ancho && form.alto && form.peso && (
-            <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · Avión</p>
+            <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Avión</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Peso volumétrico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
                 <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
-                <div><p style={{ color:"#0369a1" }}>Facturable</p><p style={{ fontWeight:700, color:"#0369a1" }}>{fmt(pFact)} kg</p></div>
+                <div><p style={{ color:"#0f3d68" }}>Facturable</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(pFact)} kg</p></div>
               </div>
             </div>
           )}
           {seaM3 && m3p > 0 && (
-            <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0369a1", marginBottom:8 }}>Vista previa · Barco</p>
+            <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Barco</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Vol. ingresado</p><p style={{ fontWeight:700 }}>{fmt(m3p, 3)} m³</p></div>
-                <div><p style={{ color:"#94a3b8" }}>Facturable</p><p style={{ fontWeight:700, color:"#0369a1" }}>{fmt(m3f, 3)} m³</p></div>
-                <div><p style={{ color:"#94a3b8" }}>Costo flete</p><p style={{ fontWeight:700, color:"#0369a1" }}>{USD(m3f * (+settings.seaRate || 600))}</p></div>
+                <div><p style={{ color:"#94a3b8" }}>Facturable</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(m3f, 3)} m³</p></div>
+                <div><p style={{ color:"#94a3b8" }}>Costo flete</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{USD(m3f * (+settings.seaRate || 600))}</p></div>
               </div>
               {m3p < 1 && <p style={{ fontSize:11, color:"#d97706", marginTop:6 }}>⚠ Menos de 1 m³ — se cobra tarifa mínima de 1 m³</p>}
             </div>
@@ -1153,8 +1153,8 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
         <button onClick={() => { if (validate()) onCalculate(form, calculate(form, settings)); }}
           style={{ width:"100%", padding:"17px 0", borderRadius:16, border:"none",
-            background:"linear-gradient(135deg,#ea580c,#f97316)", color:"white",
-            fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 6px 24px rgba(234,88,12,0.4)" }}>
+            background:"linear-gradient(135deg,#f26c1e 0%,#f2741b 55%,#fdb813 130%)", color:"white",
+            fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 6px 24px rgba(242,108,30,0.4)" }}>
           Calcular mi importación →
         </button>
         <p style={{ textAlign:"center", fontSize:12, color:"#94a3b8", marginTop:12 }}>Cotización al instante · Valores en USD y pesos argentinos</p>
@@ -1162,11 +1162,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
       <footer style={{ textAlign:"center", padding:"28px 16px 96px", fontSize:12, color:"#94a3b8", borderTop:"1px solid #e2e8f0", marginTop:16, background:"white" }}>
         <img src="/logo-fvr.jpg" alt="" style={{ width:44, height:44, borderRadius:10, objectFit:"contain", marginBottom:8 }} />
-        <p style={{ fontWeight:800, color:"#0d2347", marginBottom:4 }}>FVR Logística Internacional</p>
+        <p style={{ fontWeight:800, color:"#0b2f52", marginBottom:4 }}>FVR Logística Internacional</p>
         <p>Francisco Vega · francisco@fvrlogistica.com · +54 9 3883372745</p>
         <div style={{ display:"flex", justifyContent:"center", gap:20, marginTop:8 }}>
-          <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>🌐 fvrlogistica.com.ar</a>
-          <a href="https://linktr.ee/FVRcomex" target="_blank" rel="noreferrer" style={{ color:"#0ea5e9" }}>🔗 Linktree</a>
+          <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#18548a" }}>🌐 fvrlogistica.com.ar</a>
+          <a href="https://linktr.ee/FVRcomex" target="_blank" rel="noreferrer" style={{ color:"#18548a" }}>🔗 Linktree</a>
         </div>
       </footer>
       <WAFloat />
@@ -1177,16 +1177,16 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 /* ── ROW ─────────────────────────────────────────────────── */
 const Row = ({ label, usd, dolar, hi, na, note }) => (
   <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
-    padding:"10px 16px", borderBottom:"1px solid #f1f5f9",
-    background: hi ? "#eff6ff" : "transparent" }}>
+    padding:"10px 16px", borderBottom:"1px solid #eef2f7",
+    background: hi ? "#eef5fb" : "transparent" }}>
     <div>
-      <span style={{ fontSize:13, fontWeight: hi ? 700 : 400, color: hi ? "#0369a1" : "#334155" }}>{label}</span>
+      <span style={{ fontSize:13, fontWeight: hi ? 700 : 400, color: hi ? "#0f3d68" : "#334155" }}>{label}</span>
       {note && <p style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{note}</p>}
     </div>
     {na
       ? <span style={{ fontSize:12, color:"#94a3b8", fontStyle:"italic", flexShrink:0, marginLeft:12 }}>No aplica</span>
       : <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
-          <div style={{ fontSize:13, fontWeight:600, color: hi ? "#0369a1" : "#1e293b" }}>{USD(usd)}</div>
+          <div style={{ fontSize:13, fontWeight:600, color: hi ? "#0f3d68" : "#15233b" }}>{USD(usd)}</div>
           {dolar && <div style={{ fontSize:11, color:"#94a3b8" }}>{ARS(usd, dolar)}</div>}
         </div>
     }
@@ -1243,7 +1243,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
   const labelAlt    = esAereoComercial ? "🚢 Marítimo por kilo" : "✈️ Aéreo comercial";
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
+    <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
       <Header onAdmin={() => {}} dolar={dolar} dolarErr={false} dolarLoading={false} onRefreshDolar={() => {}} />
       {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
@@ -1254,11 +1254,11 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             {[{ alt:false, label:labelPropia, total:r0.totalGen }, { alt:true, label:labelAlt, total:rAlt.totalGen }].map(t => (
               <button key={String(t.alt)} onClick={() => setAltMode(t.alt)}
                 style={{ padding:"12px 8px", borderRadius:14, cursor:"pointer",
-                  border:`2px solid ${altMode === t.alt ? "#ea580c" : "#e2e8f0"}`,
-                  background: altMode === t.alt ? "#fff7ed" : "white",
-                  boxShadow: altMode === t.alt ? "0 2px 12px rgba(234,88,12,0.15)" : "none" }}>
-                <p style={{ fontWeight:800, fontSize:13, color: altMode === t.alt ? "#ea580c" : "#64748b" }}>{t.label}</p>
-                <p style={{ fontWeight:900, fontSize:16, color: altMode === t.alt ? "#0d2347" : "#94a3b8" }}>{USD(t.total)}</p>
+                  border:`2px solid ${altMode === t.alt ? "#f26c1e" : "#e2e8f0"}`,
+                  background: altMode === t.alt ? "#fff2e9" : "white",
+                  boxShadow: altMode === t.alt ? "0 2px 12px rgba(242,108,30,0.15)" : "none" }}>
+                <p style={{ fontWeight:800, fontSize:13, color: altMode === t.alt ? "#f26c1e" : "#64748b" }}>{t.label}</p>
+                <p style={{ fontWeight:900, fontSize:16, color: altMode === t.alt ? "#0b2f52" : "#94a3b8" }}>{USD(t.total)}</p>
               </button>
             ))}
           </div>
@@ -1270,32 +1270,32 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         )}
 
         {/* Card principal — Tu cotización de importación */}
-        <div style={{ background:"linear-gradient(135deg,#0d2347 0%,#1d4ed8 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(13,35,71,0.35)" }}>
+        <div style={{ background:"linear-gradient(135deg,#0b2f52 0%,#18548a 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(11,47,82,0.35)" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:10 }}>
             <div>
-              <p style={{ fontSize:11, color:"#93c5fd", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>Tu cotización de importación</p>
+              <p style={{ fontSize:11, color:"#b9cee2", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>Tu cotización de importación</p>
               <h2 style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>{d.nombre}</h2>
-              <p style={{ fontSize:13, color:"#93c5fd" }}>{d.producto} · <strong style={{ color:"#fdba74" }}>{tipoLabel}</strong></p>
-              {dolar && <p style={{ fontSize:11, color:"#7dd3fc", marginTop:4 }}>Dólar oficial usado: ${fmt(dolar)}</p>}
+              <p style={{ fontSize:13, color:"#b9cee2" }}>{d.producto} · <strong style={{ color:"#ffb27a" }}>{tipoLabel}</strong></p>
+              {dolar && <p style={{ fontSize:11, color:"#b9cee2", marginTop:4 }}>Dólar oficial usado: ${fmt(dolar)}</p>}
             </div>
             <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#93c5fd" }}>Total general</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>Total general</p>
               <p style={{ fontSize:28, fontWeight:900 }}>{USD(r.totalGen)}</p>
-              {dolar && <p style={{ fontSize:14, color:"#bfdbfe", fontWeight:700 }}>{ARS(r.totalGen, dolar)}</p>}
-              {r.unitario && <p style={{ fontSize:12, color:"#7dd3fc", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+              {dolar && <p style={{ fontSize:14, color:"#dbe8f6", fontWeight:700 }}>{ARS(r.totalGen, dolar)}</p>}
+              {r.unitario && <p style={{ fontSize:12, color:"#b9cee2", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, borderTop:"1px solid rgba(255,255,255,0.15)", paddingTop:14 }}>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>FOB / Valor prod.</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>FOB / Valor prod.</p>
               <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.fob)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>Envío total</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>Envío total</p>
               <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.totalLog)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#7dd3fc" }}>{r.isAir ? "Kg facturable" : (r.seaKg ? "Peso (kg)" : "M³ facturable")}</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.isAir ? "Kg facturable" : (r.seaKg ? "Peso (kg)" : "M³ facturable")}</p>
               <p style={{ fontWeight:700, fontSize:14 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
             </div>
           </div>
@@ -1330,24 +1330,24 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         <Card icon="🌐" title="Flete internacional">
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
           {r.byWeight ? (<>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background: r.seaKg ? "#eff6ff" : "transparent" }}>
-              <span style={{ color: r.seaKg ? "#0369a1" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>{r.seaKg ? "Peso real" : "Peso real total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0369a1" : "#1e293b" }}>{fmt(r.peso)} kg</span>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13, background: r.seaKg ? "#eef5fb" : "transparent" }}>
+              <span style={{ color: r.seaKg ? "#0f3d68" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>{r.seaKg ? "Peso real" : "Peso real total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0f3d68" : "#15233b" }}>{fmt(r.peso)} kg</span>
             </div>
             {r.isAir && (<>
-              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
                 <span style={{ color:"#334155" }}>Peso volumétrico (L×A×H / 5.000)</span><span style={{ fontWeight:600 }}>{fmt(r.pVol)} kg</span>
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
-                <span style={{ fontWeight:700, color:"#0369a1" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.pFact)} kg</span>
+              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13, background:"#eef5fb" }}>
+                <span style={{ fontWeight:700, color:"#0f3d68" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(r.pFact)} kg</span>
               </div>
             </>)}
             <Row label={`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
           </>) : (<>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
               <span style={{ color:"#334155" }}>Volumen ingresado</span><span style={{ fontWeight:600 }}>{fmt(r.m3, 3)} m³</span>
             </div>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #f1f5f9", fontSize:13, background:"#eff6ff" }}>
-              <span style={{ fontWeight:700, color:"#0369a1" }}>Volumen facturable (mín. {s.seaMin} m³)</span><span style={{ fontWeight:700, color:"#0369a1" }}>{fmt(r.m3Fact, 3)} m³</span>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13, background:"#eef5fb" }}>
+              <span style={{ fontWeight:700, color:"#0f3d68" }}>Volumen facturable (mín. {s.seaMin} m³)</span><span style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(r.m3Fact, 3)} m³</span>
             </div>
             <Row label={`Tarifa marítima (USD ${s.seaRate}/m³)`} usd={r.flete} dolar={dolar} />
           </>)}
@@ -1398,11 +1398,11 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         </Card>
 
         {/* Resumen final — desglose comercial completo */}
-        <div style={{ background:"#0d2347", borderRadius:20, overflow:"hidden", boxShadow:"0 4px 24px rgba(13,35,71,0.35)", marginBottom:20 }}>
+        <div style={{ background:"#0b2f52", borderRadius:20, overflow:"hidden", boxShadow:"0 4px 24px rgba(11,47,82,0.35)", marginBottom:20 }}>
           <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
             <p style={{ fontSize:11, color:"white", fontWeight:700, textTransform:"uppercase", letterSpacing:2 }}>Resumen de tu cotización</p>
           </div>
-          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontSize:13, color:"#bfdbfe" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontSize:13, color:"#dbe8f6" }}>
             {[
               ["Valor de los productos (FOB)", r.fob],
               ["Flete internacional + seguro", r.flete + r.seguro],
@@ -1417,19 +1417,19 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           </div>
           <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.1)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
-              <p style={{ fontSize:11, color:"#7dd3fc", marginBottom:4 }}>Total del envío (sin producto)</p>
+              <p style={{ fontSize:11, color:"#b9cee2", marginBottom:4 }}>Total del envío (sin producto)</p>
               <p style={{ fontSize:20, fontWeight:700, color:"white" }}>{USD(r.totalLog)}</p>
             </div>
-            {dolar && <p style={{ fontSize:14, color:"#93c5fd", fontWeight:600 }}>{ARS(r.totalLog, dolar)}</p>}
+            {dolar && <p style={{ fontSize:14, color:"#b9cee2", fontWeight:600 }}>{ARS(r.totalLog, dolar)}</p>}
           </div>
-          <div style={{ padding:"20px", background:"rgba(234,88,12,0.2)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+          <div style={{ padding:"20px", background:"rgba(242,108,30,0.2)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
             <div>
-              <p style={{ fontSize:11, color:"#fdba74", marginBottom:4, fontWeight:700 }}>TOTAL GENERAL DE IMPORTACIÓN</p>
+              <p style={{ fontSize:11, color:"#ffb27a", marginBottom:4, fontWeight:700 }}>TOTAL GENERAL DE IMPORTACIÓN</p>
               <p style={{ fontSize:28, fontWeight:900, color:"white" }}>{USD(r.totalGen)}</p>
-              {r.unitario && <p style={{ fontSize:12, color:"#fdba74", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+              {r.unitario && <p style={{ fontSize:12, color:"#ffb27a", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
             </div>
             {dolar && <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#fdba74" }}>Al dólar oficial ${fmt(dolar)}</p>
+              <p style={{ fontSize:11, color:"#ffb27a" }}>Al dólar oficial ${fmt(dolar)}</p>
               <p style={{ fontSize:18, fontWeight:700, color:"white" }}>{ARS(r.totalGen, dolar)}</p>
             </div>}
           </div>
@@ -1454,14 +1454,14 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12 }}>
             <button onClick={doPDF} disabled={pdfLoading}
-              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #bae6fd",
-                background: pdfLoading ? "#f1f5f9" : "white", color:"#0369a1", fontSize:14, fontWeight:700,
+              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #b9cee2",
+                background: pdfLoading ? "#eef2f7" : "white", color:"#0f3d68", fontSize:14, fontWeight:700,
                 cursor: pdfLoading ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
               {pdfLoading ? "⏳ Generando…" : `📄 PDF ${d.tipo === "avion" ? "aéreo" : "marítimo"}`}
             </button>
             <button onClick={copyResumen}
-              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #fed7aa",
-                background: copied ? "#f0fdf4" : "white", color: copied ? "#15803d" : "#ea580c", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+              style={{ padding:"14px 0", borderRadius:14, border:"2px solid #ffb27a",
+                background: copied ? "#f0fdf4" : "white", color: copied ? "#15803d" : "#f26c1e", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               {copied ? "✓ Copiado" : "📋 Copiar resumen"}
             </button>
             <button onClick={onBack}
@@ -1493,18 +1493,18 @@ const AdminLogin = ({ onLogin, onBack, titulo = "Panel Administrador" }) => {
     } else setErr(true);
   };
   return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f0f4f8" }}>
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f4f7fb" }}>
       <div style={{ background:"white", borderRadius:20, boxShadow:"0 4px 32px rgba(0,0,0,0.12)", padding:36, width:"100%", maxWidth:360 }}>
         <div style={{ textAlign:"center", marginBottom:24 }}>
-          <div style={{ width:56, height:56, borderRadius:16, background:"linear-gradient(135deg,#0369a1,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"white", fontSize:18, margin:"0 auto 12px" }}>FVR</div>
-          <h2 style={{ fontSize:20, fontWeight:700, color:"#1e293b" }}>{titulo}</h2>
+          <div style={{ width:56, height:56, borderRadius:16, background:"linear-gradient(135deg,#0f3d68,#18548a)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"white", fontSize:18, margin:"0 auto 12px" }}>FVR</div>
+          <h2 style={{ fontSize:20, fontWeight:700, color:"#15233b" }}>{titulo}</h2>
           <p style={{ fontSize:13, color:"#64748b" }}>FVR Logística Internacional</p>
         </div>
         <Field label="Contraseña">
           <Inp type="password" placeholder="Ingresá la contraseña" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} />
         </Field>
         {err && <p style={{ color:"#ef4444", textAlign:"center", marginBottom:12, fontSize:13 }}>Contraseña incorrecta</p>}
-        <button onClick={go} style={{ width:"100%", padding:14, borderRadius:12, border:"none", background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"white", fontWeight:700, fontSize:15, cursor:"pointer" }}>Ingresar</button>
+        <button onClick={go} style={{ width:"100%", padding:14, borderRadius:12, border:"none", background:"linear-gradient(135deg,#0f3d68,#18548a)", color:"white", fontWeight:700, fontSize:15, cursor:"pointer" }}>Ingresar</button>
         <button onClick={onBack} style={{ width:"100%", marginTop:12, background:"none", border:"none", color:"#64748b", fontSize:13, cursor:"pointer" }}>← Volver a la calculadora</button>
       </div>
     </div>
@@ -1515,19 +1515,19 @@ const AdminLogin = ({ onLogin, onBack, titulo = "Panel Administrador" }) => {
 const QuoteCard = ({ q, dolar, onStatusChange }) => {
   const [open, setOpen] = useState(false); const r = q.results;
   return (
-    <div style={{ background:"white", borderRadius:16, border:"1px solid #f1f5f9", overflow:"hidden", marginBottom:12 }}>
+    <div style={{ background:"white", borderRadius:16, border:"1px solid #eef2f7", overflow:"hidden", marginBottom:12 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:16, cursor:"pointer" }} onClick={() => setOpen(o => !o)}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <span style={{ fontSize:22 }}>{q.importType === "avion" ? "✈️" : "🚢"}</span>
           <div>
-            <p style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{q.client}</p>
+            <p style={{ fontWeight:700, fontSize:14, color:"#15233b" }}>{q.client}</p>
             <p style={{ fontSize:12, color:"#64748b" }}>{q.product} · {new Date(q.date).toLocaleDateString("es-AR")}</p>
             {q.formData?.subTipo === "personal" && <span style={{ fontSize:11, background:"#fef3c7", color:"#92400e", padding:"2px 8px", borderRadius:99, fontWeight:700 }}>Envío personal</span>}
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ textAlign:"right" }}>
-            <p style={{ fontSize:13, fontWeight:700, color:"#0369a1" }}>{USD(r?.totalGen)}</p>
+            <p style={{ fontSize:13, fontWeight:700, color:"#0f3d68" }}>{USD(r?.totalGen)}</p>
             {dolar && <p style={{ fontSize:11, color:"#94a3b8" }}>{ARS(r?.totalGen || 0, dolar)}</p>}
           </div>
           <Badge status={q.status} />
@@ -1535,7 +1535,7 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
         </div>
       </div>
       {open && (
-        <div style={{ borderTop:"1px solid #f1f5f9", padding:16 }}>
+        <div style={{ borderTop:"1px solid #eef2f7", padding:16 }}>
           {/* Datos del cliente */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14, fontSize:13 }}>
             <div><p style={{ fontSize:11, color:"#94a3b8" }}>WhatsApp</p>
@@ -1550,7 +1550,7 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                 ? q.formData.docUrls.map((u, i) => (
                     <a key={i} href={`/api/doc?u=${encodeURIComponent(u)}&k=${encodeURIComponent(sessionStorage.getItem("fvr_admin_key") || "")}`}
                       target="_blank" rel="noreferrer"
-                      style={{ display:"inline-block", fontSize:12, color:"#0369a1", fontWeight:700, marginRight:12 }}>
+                      style={{ display:"inline-block", fontSize:12, color:"#0f3d68", fontWeight:700, marginRight:12 }}>
                       📎 {q.formData?.files?.[i] || `Documento ${i + 1}`}
                     </a>
                   ))
@@ -1566,7 +1566,7 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                 <span style={{ color:"#64748b" }}>FOB / Valor productos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.fob)}</span>
                 <span style={{ color:"#64748b" }}>Flete internacional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.flete)}</span>
                 <span style={{ color:"#64748b" }}>Seguro</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.seguro)}</span>
-                <span style={{ color:"#0369a1", fontWeight:700 }}>CIF / Valor en aduana</span><span style={{ fontWeight:700, color:"#0369a1", textAlign:"right" }}>{USD(r.cif)}</span>
+                <span style={{ color:"#0f3d68", fontWeight:700 }}>CIF / Valor en aduana</span><span style={{ fontWeight:700, color:"#0f3d68", textAlign:"right" }}>{USD(r.cif)}</span>
                 <span style={{ color:"#64748b" }}>Derecho importación</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.duty)}</span>
                 {!r.isPersonal && <><span style={{ color:"#64748b" }}>Tasa estadística</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.stat)}</span></>}
                 <span style={{ color:"#64748b" }}>IVA</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.iva)}</span>
@@ -1579,8 +1579,8 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                 {(r.hasHandling ?? r.isAir) && <><span style={{ color:"#64748b" }}>Handling</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.handling)}</span></>}
                 <span style={{ color:"#64748b" }}>Envío nacional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.domestic)}</span>
                 <span style={{ color:"#64748b" }}>Honorarios de Gestión</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.fees)}</span>
-                <span style={{ color:"#475569", fontWeight:700, borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>Total envío</span><span style={{ fontWeight:700, color:"#0369a1", textAlign:"right", borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>{USD(r.totalLog)}</span>
-                <span style={{ color:"#0d2347", fontWeight:900, fontSize:13 }}>TOTAL GENERAL</span><span style={{ fontWeight:900, color:"#0d2347", textAlign:"right", fontSize:13 }}>{USD(r.totalGen)}</span>
+                <span style={{ color:"#475569", fontWeight:700, borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>Total envío</span><span style={{ fontWeight:700, color:"#0f3d68", textAlign:"right", borderTop:"1px solid #e2e8f0", paddingTop:6, marginTop:2 }}>{USD(r.totalLog)}</span>
+                <span style={{ color:"#0b2f52", fontWeight:900, fontSize:13 }}>TOTAL GENERAL</span><span style={{ fontWeight:900, color:"#0b2f52", textAlign:"right", fontSize:13 }}>{USD(r.totalGen)}</span>
               </div>
               {q.formData?.aiSuggestion && (
                 <p style={{ marginTop:8, fontSize:11, color:"#166534", background:"#f0fdf4", padding:"6px 10px", borderRadius:8, border:"1px solid #86efac" }}>
@@ -1595,8 +1595,8 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
             <span style={{ fontSize:12, color:"#64748b", fontWeight:700 }}>Estado:</span>
             {Object.entries(STATUS_MAP).map(([k, v]) => (
               <button key={k} onClick={() => onStatusChange(q.id, k)}
-                style={{ fontSize:12, padding:"4px 10px", borderRadius:99, border:`2px solid ${q.status===k?"#0ea5e9":"#e2e8f0"}`,
-                  background: q.status===k ? "#eff6ff" : "white", color: q.status===k ? "#0369a1" : "#64748b",
+                style={{ fontSize:12, padding:"4px 10px", borderRadius:99, border:`2px solid ${q.status===k?"#18548a":"#e2e8f0"}`,
+                  background: q.status===k ? "#eef5fb" : "white", color: q.status===k ? "#0f3d68" : "#64748b",
                   fontWeight:700, cursor:"pointer" }}>{v.label}
               </button>
             ))}
@@ -1620,7 +1620,7 @@ const SettingToggle = ({ s, setS, label, k }) => (
   <label style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", cursor:"pointer" }}>
     <span style={{ fontSize:13, color:"#334155" }}>{label}</span>
     <button onClick={() => setS(p => ({ ...p, [k]: !p[k] }))}
-      style={{ width:44, height:24, borderRadius:99, background: s[k] ? "#0ea5e9" : "#cbd5e1", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+      style={{ width:44, height:24, borderRadius:99, background: s[k] ? "#18548a" : "#cbd5e1", border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
       <span style={{ position:"absolute", top:2, width:20, height:20, background:"white", borderRadius:"50%", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"left 0.2s", left: s[k] ? 22 : 2 }} />
     </button>
   </label>
@@ -1663,22 +1663,22 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
   const navStyle = (id) => ({
     display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:12,
     border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
-    background: tab===id ? "#0ea5e9" : "transparent",
+    background: tab===id ? "#18548a" : "transparent",
     color: tab===id ? "white" : "#475569",
-    boxShadow: tab===id ? "0 2px 8px rgba(14,165,233,0.3)" : "none",
+    boxShadow: tab===id ? "0 2px 8px rgba(24,84,138,0.3)" : "none",
   });
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f0f4f8" }}>
-      <div style={{ background:"linear-gradient(135deg,#0a1628,#0d2347)", color:"white", padding:"14px 20px" }}>
+    <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
+      <div style={{ background:"linear-gradient(135deg,#0b2f52,#0f3d68)", color:"white", padding:"14px 20px" }}>
         <div style={{ maxWidth:900, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#38bdf8,#0ea5e9)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#0c2340", fontSize:12 }}>FVR</div>
-            <div><p style={{ fontWeight:700, fontSize:14 }}>Panel Administrador</p><p style={{ fontSize:11, color:"#7dd3fc" }}>FVR Logística Internacional</p></div>
+            <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#b9cee2,#18548a)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#0b2f52", fontSize:12 }}>FVR</div>
+            <div><p style={{ fontWeight:700, fontSize:14 }}>Panel Administrador</p><p style={{ fontSize:11, color:"#b9cee2" }}>FVR Logística Internacional</p></div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12, color:"#7dd3fc" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12, color:"#b9cee2" }}>
             <span>Dólar: ${fmt(dolar)}</span>
-            <button onClick={fetchDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#38bdf8", cursor:"pointer", fontSize:16 }}>↺</button>
+            <button onClick={fetchDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#b9cee2", cursor:"pointer", fontSize:16 }}>↺</button>
             <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.1)", border:"none", color:"white", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12 }}>Cerrar sesión</button>
           </div>
         </div>
@@ -1698,9 +1698,9 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
           <div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:16, marginBottom:24 }}>
               {[{l:"Visitas",v:metrics.visits,i:"👁️"},{l:"Empezaron",v:metrics.started,i:"📝"},{l:"Presupuestos",v:metrics.generated,i:"📋"},{l:"Enviados WA",v:metrics.sentWhatsapp,i:"💬"}].map(({l,v,i})=>(
-                <div key={l} style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}>
+                <div key={l} style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}>
                   <p style={{ fontSize:24, marginBottom:4 }}>{i}</p>
-                  <p style={{ fontSize:28, fontWeight:900, color:"#1e293b" }}>{v}</p>
+                  <p style={{ fontSize:28, fontWeight:900, color:"#15233b" }}>{v}</p>
                   <p style={{ fontSize:12, color:"#64748b" }}>{l}</p>
                 </div>
               ))}
@@ -1709,9 +1709,9 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               <AdminCharts last7={last7} sdData={sdData} />
             </Suspense>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
-              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Total cotizado USD</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0))}</p></div>
-              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Promedio</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{quotes.length?USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0)/quotes.length):USD(0)}</p></div>
-              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #f1f5f9" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Tipo más elegido</p><p style={{ fontSize:20, fontWeight:900, color:"#0369a1" }}>{quotes.filter(q=>q.importType==="avion").length>=quotes.filter(q=>q.importType==="barco").length?"✈️ Avión":"Barco"}</p></div>
+              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Total cotizado USD</p><p style={{ fontSize:20, fontWeight:900, color:"#0f3d68" }}>{USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0))}</p></div>
+              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Promedio</p><p style={{ fontSize:20, fontWeight:900, color:"#0f3d68" }}>{quotes.length?USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0)/quotes.length):USD(0)}</p></div>
+              <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Tipo más elegido</p><p style={{ fontSize:20, fontWeight:900, color:"#0f3d68" }}>{quotes.filter(q=>q.importType==="avion").length>=quotes.filter(q=>q.importType==="barco").length?"✈️ Avión":"Barco"}</p></div>
             </div>
           </div>
         )}
@@ -1780,8 +1780,8 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 <SettingField s={s} setS={setS} label="Pick up / Retiro en origen (USD)" k="pickup"/>
                 <SettingField s={s} setS={setS} label="Envío nacional -barco m³- (USD)" k="domesticSea"/>
               </div>
-              <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
-                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>✈️ Avión</p>
+              <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
+                <p style={{ fontSize:12, color:"#0f3d68", fontWeight:700, marginBottom:8 }}>✈️ Avión</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   <SettingField s={s} setS={setS} label="Handling (USD)" k="handling"/>
                   <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domestic"/>
@@ -1789,8 +1789,8 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 <SettingField s={s} setS={setS} label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
                 <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
-              <div style={{ background:"#eff6ff", border:"1px solid #bae6fd", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
-                <p style={{ fontSize:12, color:"#0369a1", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
+              <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
+                <p style={{ fontSize:12, color:"#0f3d68", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                   <SettingField s={s} setS={setS} label="Handling (USD)" k="handlingSea"/>
                   <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domesticSeaKg"/>
@@ -1802,8 +1802,8 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 <div style={{ display:"flex", gap:12 }}>
                   {["fixed","percentage"].map(t=>(
                     <button key={t} onClick={()=>setS(p=>({...p,feeType:t}))}
-                      style={{ flex:1, padding:"10px 0", borderRadius:12, border:`2px solid ${s.feeType===t?"#0ea5e9":"#e2e8f0"}`,
-                        background: s.feeType===t ? "#eff6ff" : "white", color: s.feeType===t ? "#0369a1" : "#475569",
+                      style={{ flex:1, padding:"10px 0", borderRadius:12, border:`2px solid ${s.feeType===t?"#18548a":"#e2e8f0"}`,
+                        background: s.feeType===t ? "#eef5fb" : "white", color: s.feeType===t ? "#0f3d68" : "#475569",
                         fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       {t==="fixed"?"💵 Monto fijo USD":"📊 Porcentaje %"}
                     </button>
@@ -1833,11 +1833,11 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             </Card>
             <Card icon="💱" title="Dólar oficial">
               <div style={{ display:"flex", gap:12, marginBottom:14, alignItems:"center" }}>
-                <div style={{ flex:1, background:"#f0f9ff", borderRadius:12, padding:12, textAlign:"center" }}>
+                <div style={{ flex:1, background:"#eef5fb", borderRadius:12, padding:12, textAlign:"center" }}>
                   <p style={{ fontSize:11, color:"#64748b" }}>Valor actual (automático)</p>
-                  <p style={{ fontSize:22, fontWeight:900, color:"#0369a1" }}>${fmt(dolar)}</p>
+                  <p style={{ fontSize:22, fontWeight:900, color:"#0f3d68" }}>${fmt(dolar)}</p>
                 </div>
-                <button onClick={fetchDolar} style={{ padding:"10px 18px", borderRadius:12, background:"#e0f2fe", color:"#0369a1", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>↺ Actualizar</button>
+                <button onClick={fetchDolar} style={{ padding:"10px 18px", borderRadius:12, background:"#dbe8f6", color:"#0f3d68", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>↺ Actualizar</button>
               </div>
               <Field label="Carga manual (opcional)" hint="Si se ingresa, reemplaza al valor automático.">
                 <Inp type="number" placeholder="Ej: 1420.00" value={s.manualDolar||""} onChange={e=>setS(p=>({...p,manualDolar:e.target.value?+e.target.value:null}))}/>
@@ -1854,11 +1854,11 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             </Card>
             <button onClick={save}
               style={{ width:"100%", padding:16, borderRadius:16, border:"none",
-                background: saved ? "#22c55e" : "linear-gradient(135deg,#0369a1,#0ea5e9)",
+                background: saved ? "#22c55e" : "linear-gradient(135deg,#0f3d68,#18548a)",
                 color:"white", fontWeight:900, fontSize:16, cursor:"pointer", marginBottom:12 }}>
               {saved ? "✓ Cambios guardados" : "Guardar configuración"}
             </button>
-            <div style={{ background:"#f1f5f9", borderRadius:12, padding:14, fontSize:12, color:"#64748b" }}>
+            <div style={{ background:"#eef2f7", borderRadius:12, padding:14, fontSize:12, color:"#64748b" }}>
               <strong>Contraseña de administrador:</strong> fvr2024
             </div>
           </div>
@@ -1937,17 +1937,17 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f172a", color: "white", paddingBottom: 40 }}>
-      <div style={{ background: "linear-gradient(135deg,#0a1628,#0d2347)", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+      <div style={{ background: "linear-gradient(135deg,#0b2f52,#0f3d68)", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <img src="/logo-fvr.jpg" alt="" style={{ width: 38, height: 38, borderRadius: 10, background: "white", padding: 2, objectFit: "contain" }} />
-            <div><p style={{ fontWeight: 800, fontSize: 15 }}>⚡ Cotizador interno</p><p style={{ fontSize: 11, color: "#7dd3fc" }}>Sin registro de leads · cálculo instantáneo</p></div>
+            <div><p style={{ fontWeight: 800, fontSize: 15 }}>⚡ Cotizador interno</p><p style={{ fontSize: 11, color: "#b9cee2" }}>Sin registro de leads · cálculo instantáneo</p></div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#7dd3fc", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#b9cee2", flexWrap: "wrap" }}>
             <span>Dólar: ${fmt(rate || 0)}{dolarOv ? " ✍️" : ""}</span>
             <input placeholder="TC manual" value={dolarOv} onChange={e => setDolarOv(e.target.value.replace(/[^0-9.]/g, ""))}
               style={{ width: 90, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", fontSize: 12 }} />
-            <button onClick={fetchDolar} aria-label="Actualizar dólar" style={{ background: "none", border: "none", color: "#38bdf8", cursor: "pointer", fontSize: 15 }}>↺</button>
+            <button onClick={fetchDolar} aria-label="Actualizar dólar" style={{ background: "none", border: "none", color: "#b9cee2", cursor: "pointer", fontSize: 15 }}>↺</button>
             <button onClick={() => { setD(blank); setOv({}); setDolarOv(""); }}
               style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🔄 Reset</button>
             {!embedded && <a href="/" style={{ color: "#94a3b8", fontSize: 12, textDecoration: "none" }}>← Sitio público</a>}
@@ -1957,8 +1957,8 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
 
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, alignItems: "start" }}>
         {/* Columna datos */}
-        <div style={{ background: "white", borderRadius: 16, padding: 18, color: "#1e293b" }}>
-          <p style={{ fontWeight: 800, fontSize: 13, color: "#0d2347", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>📦 Datos</p>
+        <div style={{ background: "white", borderRadius: 16, padding: 18, color: "#15233b" }}>
+          <p style={{ fontWeight: 800, fontSize: 13, color: "#0b2f52", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>📦 Datos</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div style={{ gridColumn: "1/-1" }}><Inp placeholder="Producto" value={d.producto} onChange={e => set("producto", e.target.value)} style={inputMini} /></div>
             <div style={{ gridColumn: "1/-1" }}><Inp placeholder="Cliente (opcional — aparece en el PDF)" value={d.nombre} onChange={e => set("nombre", e.target.value)} style={inputMini} /></div>
@@ -1980,7 +1980,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
               const activo = v === "avion" ? d.tipo === "avion" : d.tipo === "barco" && (v === "barco-kg" ? d.seaMode === "kg" : d.seaMode === "m3");
               return (
                 <button key={v} onClick={() => v === "avion" ? set("tipo", "avion") : setD(p => ({ ...p, tipo: "barco", seaMode: v === "barco-kg" ? "kg" : "m3" }))}
-                  style={{ flex: 1, minWidth: 80, padding: "10px 0", borderRadius: 10, border: `2px solid ${activo ? "#0ea5e9" : "#e2e8f0"}`, background: activo ? "#eff6ff" : "white", color: activo ? "#0369a1" : "#64748b", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                  style={{ flex: 1, minWidth: 80, padding: "10px 0", borderRadius: 10, border: `2px solid ${activo ? "#18548a" : "#e2e8f0"}`, background: activo ? "#eef5fb" : "white", color: activo ? "#0f3d68" : "#64748b", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                   {l}
                 </button>
               );
@@ -1990,7 +1990,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               {[["comercial", "🏢 Comercial"], ["personal", "👤 Personal"]].map(([v, l]) => (
                 <button key={v} onClick={() => set("subTipo", v)}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: `2px solid ${d.subTipo === v ? "#0ea5e9" : "#e2e8f0"}`, background: d.subTipo === v ? "#eff6ff" : "white", color: d.subTipo === v ? "#0369a1" : "#64748b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{l}</button>
+                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: `2px solid ${d.subTipo === v ? "#18548a" : "#e2e8f0"}`, background: d.subTipo === v ? "#eef5fb" : "white", color: d.subTipo === v ? "#0f3d68" : "#64748b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{l}</button>
               ))}
             </div>
           )}
@@ -2012,7 +2012,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
                 ))}
               </div>
               <button onClick={() => { const merged = { ...settings, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== "").map(([k, v]) => [k, +v])) }; saveSettings(merged); setSavedGlobal(true); setTimeout(() => setSavedGlobal(false), 2000); }}
-                style={{ width: "100%", marginTop: 10, padding: "9px 0", borderRadius: 10, border: "none", background: savedGlobal ? "#22c55e" : "#0d2347", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                style={{ width: "100%", marginTop: 10, padding: "9px 0", borderRadius: 10, border: "none", background: savedGlobal ? "#22c55e" : "#0b2f52", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                 {savedGlobal ? "✓ Guardado" : "💾 Guardar estos valores como configuración global"}
               </button>
             </div>
@@ -2021,12 +2021,12 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
 
         {/* Columna resultado */}
         <div>
-          <div style={{ background: "linear-gradient(135deg,#0d2347,#1d4ed8)", borderRadius: 16, padding: 18, marginBottom: 14 }}>
-            <p style={{ fontSize: 11, color: "#93c5fd", textTransform: "uppercase", letterSpacing: 1 }}>Total general</p>
+          <div style={{ background: "linear-gradient(135deg,#0b2f52,#18548a)", borderRadius: 16, padding: 18, marginBottom: 14 }}>
+            <p style={{ fontSize: 11, color: "#b9cee2", textTransform: "uppercase", letterSpacing: 1 }}>Total general</p>
             <p style={{ fontSize: 32, fontWeight: 900 }}>{USD(r.totalGen)}</p>
-            {rate && <p style={{ fontSize: 14, color: "#93c5fd" }}>ARS {fmt(r.totalGen * rate, 0)} · dólar ${fmt(rate)}</p>}
-            {r.unitario && <p style={{ fontSize: 13, color: "#7dd3fc", marginTop: 4 }}>≈ {USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#bfdbfe" }}>
+            {rate && <p style={{ fontSize: 14, color: "#b9cee2" }}>ARS {fmt(r.totalGen * rate, 0)} · dólar ${fmt(rate)}</p>}
+            {r.unitario && <p style={{ fontSize: 13, color: "#b9cee2", marginTop: 4 }}>≈ {USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#dbe8f6" }}>
               <span>Flete: {USD(r.flete)}</span><span>CIF: {USD(r.cif)}</span>
               <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
               <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
@@ -2049,7 +2049,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <button onClick={() => copy(buildShortSummary(dd, r, rate), "cliente")}
-              style={{ padding: "13px 0", borderRadius: 12, border: "none", background: copied === "cliente" ? "#22c55e" : "linear-gradient(135deg,#ea580c,#f97316)", color: "white", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+              style={{ padding: "13px 0", borderRadius: 12, border: "none", background: copied === "cliente" ? "#22c55e" : "linear-gradient(135deg,#f26c1e 0%,#f2741b 55%,#fdb813 130%)", color: "white", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
               {copied === "cliente" ? "✓ Copiado" : "📋 Copiar resumen cliente"}
             </button>
             <button onClick={() => copy(detalleTecnico(), "tecnico")}
@@ -2057,7 +2057,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
               {copied === "tecnico" ? "✓ Copiado" : "🔧 Copiar detalle técnico"}
             </button>
             <button onClick={doPDF} disabled={pdfLoading}
-              style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0369a1,#0ea5e9)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
+              style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0f3d68,#18548a)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
               {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
             </button>
           </div>

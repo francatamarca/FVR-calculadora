@@ -1,56 +1,49 @@
-/* ── MOTOR ARANCELARIO FVR ──────────────────────────────────
-   Única fuente de verdad para derechos de importación.
-   Regla central: la IA puede INTERPRETAR productos y SUGERIR códigos,
-   pero el % de derecho SIEMPRE sale de la base local (tariffData.js),
-   de una fuente oficial futura, o de carga manual confirmada.
+/* ── MOTOR ARANCELARIO FVR v2 ───────────────────────────────
+   Única fuente de verdad para derechos de importación (DIE extrazona).
+   Regla central: la IA puede INTERPRETAR productos y ELEGIR entre
+   candidatos REALES, pero el % de derecho SIEMPRE sale de la base
+   local (TEC oficial + excepciones argentinas verificadas).
    NUNCA de texto libre de un modelo.
 
-   Precisión según dígitos ingresados:
-   - 4 dígitos  → partida incompleta (referencial)
-   - 6 dígitos  → subpartida HS internacional (incompleta para Argentina)
-   - 8+ dígitos → NCM (mejor precisión disponible en la base local, que
-                  resuelve por prefijo de 4 dígitos; los sufijos SIM se
-                  aceptan pero no cambian el resultado por ahora)
+   ORDEN DE CAPAS (Fase 7 — gana la primera que matchee):
+     1. Excepciones argentinas verificadas (src/data/argExceptions.js)
+     2. Dec. 236/2025 textil/calzado (tabla argentina auditada)
+     3. TEC/AEC oficial a 8 dígitos (10.515 posiciones)
+     4. Tabla interna auditada por partida (4 dígitos)
+     5. Promedio del capítulo (muy referencial)
+   Una tabla de 4 dígitos NUNCA pisa una posición oficial de 8 dígitos:
+   la capa 4 solo actúa cuando el código no llega a 8 dígitos o la
+   posición no existe en la base oficial.
 
-   Para actualizar la base: editar src/lib/tariffData.js (o reemplazarla
-   por un JSON importado / API oficial) y actualizar TARIFF_SOURCE. */
+   Por DESCRIPCIÓN (Fase 5 — jerarquía):
+     1. Regla exacta por PALABRA COMPLETA (sin substring: "control
+        remoto" ya no matchea "moto") con guards negativos.
+        El % del match se re-resuelve contra classifyCode (base oficial).
+     2. Familia comercial → estimación determinística (mediana de las
+        posiciones oficiales de la familia) — ver src/lib/families.js.
+     3. Genérico 16% (última alternativa, requiere validación manual).
+
+   Para actualizar la base: scripts/update-tariff-base.mjs (pipeline). */
 
 import { NCM_RATES, CHAPTER_DESC, CHAPTER_RATES, KEYWORD_RULES } from "./tariffData.js";
 import { NCM8, BIT_SET } from "../data/ncm8.js";
+import { argExceptionFor, DEC236, ARG_EXCEPTIONS_META } from "../data/argExceptions.js";
+import { tokenize, phraseMatch } from "./textNorm.js";
+import { detectFamily, familyEstimate } from "./families.js";
+import { TARIFF_META } from "../data/tariffMeta.js";
 
 export const TARIFF_SOURCE = {
-  name: "TEC/AEC Mercosur oficial (Res. Gecex 272/21, act. 10/2025) + excepciones argentinas + tabla interna auditada",
-  shortName: "TEC/AEC oficial + excepciones AR",
-  date: "2026-06-24",
-  dutyType: "DIE_EXTRAZONA", // derecho extrazona: lo que paga origen China/USA (NO el DII intrazona Mercosur)
-};
-
-/* ── EXCEPCIONES NACIONALES ARGENTINAS ──────────────────────
-   Aplican POR ENCIMA del AEC oficial (longest-prefix sobre el código):
-   - Informática/telecom: notebooks/tablets (8471.30) y celulares
-     (8517.12/13) a 0% por decretos nacionales 2025/2026 (régimen BIT).
-   - Régimen automotor: autos (8703) al 35%.
-   Textil/calzado (Dec. 236/2025) se maneja por capítulo más abajo. */
-const ARG_OVERRIDES = [
-  ["847130", 0,  "Excepción argentina: informática (notebooks/tablets) 0%"],
-  ["851712", 0,  "Excepción argentina: celulares 0% (Dec. 333/2025)"],
-  ["851713", 0,  "Excepción argentina: celulares 0% (Dec. 333/2025)"],
-  ["8703",   35, "Régimen automotor argentino: 35%"],
-];
-// Dec. 236/2025: Argentina bajó textil/calzado — el AEC oficial (35%) NO aplica.
-// Para estos capítulos manda la tabla interna auditada (ropa/calzado 20%, telas 18%).
-const DEC236_CHAPTERS = new Set(["50","51","52","53","54","55","56","57","58","59","60","61","62","63","64"]);
-
-const argOverrideFor = (digits) => {
-  for (const [prefix, rate, motivo] of ARG_OVERRIDES) {
-    if (digits.startsWith(prefix)) return { rate, motivo };
-  }
-  return null;
+  name: TARIFF_META.source,      // "Arancel Integrado ARCA — DIE extrazona consolidado"
+  shortName: "DIE oficial ARCA",
+  date: TARIFF_META.baseDate,    // fecha del nomenclador — la actualiza el pipeline
+  exceptionsDate: ARG_EXCEPTIONS_META.date,
+  dutyType: "DIE_EXTRAZONA",     // lo que paga origen China/USA (NO el DII intrazona Mercosur)
 };
 
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-/* Sinónimos frecuentes → término canónico que sí matchea en KEYWORD_RULES */
+/* Sinónimos frecuentes → término canónico que sí matchea en las reglas.
+   Frases evaluadas por palabra completa (tokens consecutivos). */
 const SYNONYMS = [
   { from: ["collar gps", "rastreador gps", "tracker gps", "gps para mascotas", "collar rastreador"], to: "reloj inteligente" }, // 8517.62 dispositivos de transmisión — mismo tratamiento BIT
   { from: ["cerradura inteligente", "smart lock", "cerradura wifi", "cerradura digital"], to: "cerradura electronica" },
@@ -61,11 +54,11 @@ const SYNONYMS = [
   { from: ["silla de ruedas"], to: "silla de ruedas ortopedica" },
 ];
 
-/* Reglas extra que no estaban en KEYWORD_RULES (con NCM y arancel de la base) */
+/* Reglas extra que no están en KEYWORD_RULES (van primero: más específicas) */
 const EXTRA_RULES = [
   { k: ["cerradura electronica", "cerradura", "candado"], hs: "8301.40.00", rate: NCM_RATES["8301"], desc: "Cerraduras y candados" },
-  { k: ["producto ortopedico", "ortopedia", "protesis"], hs: "9021.10.10", rate: NCM_RATES["9021"], desc: "Artículos ortopédicos (cap. 90.21)" },
-  { k: ["silla de ruedas ortopedica"], hs: "8713.10.00", rate: NCM_RATES["8713"], desc: "Sillas de ruedas" },
+  { k: ["producto ortopedico", "ortopedia", "protesis"], hs: "9021.10.10", rate: 12.6, desc: "Artículos ortopédicos (cap. 90.21)" },
+  { k: ["silla de ruedas ortopedica"], hs: "8713.10.00", rate: 10.8, desc: "Sillas de ruedas" },
   { k: ["repuesto maquina"], hs: "8487.90.00", rate: NCM_RATES["8485"] ?? CHAPTER_RATES["84"], desc: "Partes de máquinas (cap. 84) — clasificar por la máquina a la que pertenece" },
 ];
 
@@ -110,41 +103,45 @@ export function classifyCode(raw) {
   const prec = precisionFor(digits.length);
   const descCap = CHAPTER_DESC[p2] ? `Mercadería del capítulo ${p2}: ${CHAPTER_DESC[p2]}` : "Mercadería clasificada en el NCM";
 
-  // ── CAPA 1: excepciones nacionales argentinas (informática 0%, autos 35%) ──
-  const ov = argOverrideFor(digits);
+  // ── CAPA 1: excepciones nacionales argentinas verificadas ──
+  const ov = argExceptionFor(digits);
   if (ov) {
     result.productDescription = descCap;
     result.candidates.push(baseCandidate({
       code: String(raw), description: descCap, dutyRate: ov.rate,
-      precision: prec.precision, precisionLabel: prec.label, confidence: "high",
-      source: "Excepción nacional argentina", warnings: [ov.motivo, ...prec.warnings],
+      precision: digits.length >= 8 ? "NCM_8_OFICIAL" : prec.precision,
+      precisionLabel: digits.length >= 8 ? "NCM 8 dígitos · excepción argentina" : prec.label,
+      confidence: "high",
+      source: "Excepción nacional argentina", norma: ov.norma,
+      warnings: [ov.motivo, ...prec.warnings],
     }));
     result.selected = result.candidates[0];
     return result;
   }
 
   // ── CAPA 2: Dec. 236/2025 (textil/calzado) — manda la tabla argentina auditada ──
-  if (DEC236_CHAPTERS.has(p2) && NCM_RATES[p4] !== undefined) {
+  if (DEC236.active && DEC236.chapters.has(p2) && NCM_RATES[p4] !== undefined) {
     result.productDescription = descCap;
     result.candidates.push(baseCandidate({
       code: String(raw), description: descCap, dutyRate: NCM_RATES[p4],
       precision: prec.precision, precisionLabel: prec.label, confidence: digits.length >= 8 ? "high" : prec.confidence,
-      source: "Dec. 236/2025 (excepción argentina textil/calzado)",
-      warnings: ["Argentina redujo este sector por Dec. 236/2025 — el AEC Mercosur (35%) no aplica.", ...prec.warnings],
+      source: "Dec. 236/2025 (excepción argentina textil/calzado)", norma: DEC236.norma,
+      warnings: [DEC236.motivo, ...prec.warnings],
     }));
     result.selected = result.candidates[0];
     return result;
   }
 
-  // ── CAPA 3: TEC/AEC oficial a 8 dígitos (10.515 posiciones, Res. Gecex 272/21) ──
+  // ── CAPA 3: DIE argentino oficial a 8 dígitos (Arancel Integrado ARCA,
+  //    consolidado con toda la normativa vigente — ver scripts/update-tariff-base.mjs) ──
   if (digits.length >= 8 && NCM8[p8] !== undefined) {
     const esBIT = BIT_SET.has(p8);
     result.productDescription = descCap;
     result.candidates.push(baseCandidate({
       code: String(raw), description: descCap, dutyRate: NCM8[p8],
-      precision: "NCM_8_OFICIAL", precisionLabel: "NCM 8 dígitos · TEC oficial",
+      precision: "NCM_8_OFICIAL", precisionLabel: "NCM 8 dígitos · DIE oficial ARCA",
       confidence: "high",
-      source: "TEC/AEC Mercosur oficial (Res. Gecex 272/21)",
+      source: "DIE oficial ARCA (Arancel Integrado, TEC/AEC + normativa argentina consolidada)",
       warnings: esBIT && NCM8[p8] > 0
         ? ["Posición del régimen de informática/telecom (BIT): Argentina suele aplicar 0% — verificar la excepción vigente."]
         : [],
@@ -154,12 +151,12 @@ export function classifyCode(raw) {
   }
 
   // ── CAPA 4: tabla interna auditada por partida (4 dígitos) ──
+  // Solo llega acá un código sin posición oficial de 8 dígitos.
   if (digits.length >= 4 && NCM_RATES[p4] !== undefined) {
-    const desc = CHAPTER_DESC[p2] ? `Mercadería del capítulo ${p2}: ${CHAPTER_DESC[p2]}` : "Mercadería clasificada en el NCM";
-    result.productDescription = desc;
+    result.productDescription = descCap;
     result.candidates.push(baseCandidate({
       code: raw && String(raw).length > 4 ? String(raw) : p4,
-      description: desc,
+      description: descCap,
       dutyRate: NCM_RATES[p4],
       precision: prec.precision,
       precisionLabel: prec.label,
@@ -189,11 +186,24 @@ export function classifyCode(raw) {
   return result;
 }
 
-/* ── Clasificación por descripción de producto ────────────── */
+/* ── Match de reglas por palabra completa (con guards negativos) ── */
+const matchRule = (tokens, rules) => {
+  for (const rule of rules) {
+    if (rule.not && rule.not.some((n) => phraseMatch(tokens, n))) continue;
+    if (rule.k.some((kw) => phraseMatch(tokens, kw))) return rule;
+  }
+  return null;
+};
+
+/* ── Clasificación por descripción de producto (Fase 5) ────────
+   Jerarquía: regla exacta → familia comercial → genérico 16%. */
 export function classifyProduct(text) {
-  let t = norm(text).replace(/[^a-z0-9 ]/g, " ");
+  let t = String(text || "");
+  let tokens = tokenize(t);
+
+  // Sinónimos: si una frase matchea (por palabra completa), reemplaza la consulta
   for (const syn of SYNONYMS) {
-    if (syn.from.some((f) => t.includes(norm(f)))) { t = norm(syn.to); break; }
+    if (syn.from.some((f) => phraseMatch(tokens, f))) { t = syn.to; tokens = tokenize(t); break; }
   }
 
   const result = {
@@ -205,41 +215,68 @@ export function classifyProduct(text) {
     requiresManualValidation: false,
   };
 
-  // Las reglas específicas (EXTRA_RULES) van PRIMERO: "silla de ruedas" debe
-  // matchear 8713 (8%) antes de que la regla genérica "silla" (muebles 18%) la capture.
-  const allRules = [...EXTRA_RULES, ...KEYWORD_RULES];
-  for (const rule of allRules) {
-    if (rule.k.some((kw) => t.includes(norm(kw).replace(/[^a-z0-9 ]/g, " ")))) {
-      result.productDescription = rule.desc;
-      result.normalizedCode = clean(rule.hs);
+  // ── NIVEL 1: regla exacta (EXTRA_RULES primero: más específicas) ──
+  const rule = matchRule(tokens, [...EXTRA_RULES, ...KEYWORD_RULES]);
+  if (rule) {
+    // El % se re-resuelve contra la base oficial/excepciones para el NCM de la
+    // regla; el rate manual queda como fallback si la posición no existe.
+    const official = classifyCode(rule.hs);
+    const oc = official.selected;
+    const useOfficial = oc && (oc.precision === "NCM_8_OFICIAL" || oc.source === "Excepción nacional argentina" || (oc.source || "").startsWith("Dec. 236"));
+    result.productDescription = rule.desc;
+    result.normalizedCode = clean(rule.hs);
+    result.candidates.push(baseCandidate({
+      code: rule.hs,
+      description: rule.desc,
+      dutyRate: useOfficial ? oc.dutyRate : rule.rate,
+      precision: "KEYWORD_MATCH",
+      precisionLabel: "Detección por tipo de producto (referencial)",
+      confidence: "medium",
+      source: useOfficial ? oc.source : TARIFF_SOURCE.shortName,
+      warnings: ["Clasificación por descripción: confirmar la posición NCM exacta antes de operar."],
+    }));
+    result.selected = result.candidates[0];
+    return result;
+  }
+
+  // ── NIVEL 2: familia comercial (término amplio) — estimación determinística ──
+  const fam = detectFamily(t);
+  if (fam) {
+    const est = familyEstimate(fam);
+    if (est) {
+      result.productDescription = fam.label;
+      result.normalizedCode = clean(fam.hsRef);
       result.candidates.push(baseCandidate({
-        code: rule.hs,
-        description: rule.desc,
-        dutyRate: rule.rate,
-        precision: "KEYWORD_MATCH",
-        precisionLabel: "Detección por tipo de producto (referencial)",
-        confidence: "medium",
-        warnings: ["Clasificación por descripción: confirmar la posición NCM exacta antes de operar."],
+        code: `${fam.hsRef} (familia)`,
+        description: `${fam.label} — estimación por categoría comercial`,
+        dutyRate: est.rate,
+        precision: "FAMILY_ESTIMATE",
+        precisionLabel: "Estimación por categoría",
+        confidence: "low",
+        source: `Mediana de ${est.positions} posiciones oficiales de la familia`,
+        warnings: [
+          `"${fam.label}" abarca varias posiciones NCM con aranceles distintos: el ${est.rate}% es la mediana de las ${est.positions} posiciones oficiales de la familia.`,
+          "Para el arancel exacto indicá el producto puntual o el código NCM.",
+        ],
       }));
-      break;
+      result.selected = result.candidates[0];
+      result.requiresManualValidation = true;
+      return result;
     }
   }
 
-  if (!result.candidates.length) {
-    // Sin match: NO inventar — devolver referencial genérico con advertencia fuerte
-    result.productDescription = "Producto sin clasificación automática";
-    result.candidates.push(baseCandidate({
-      code: "—",
-      description: "Producto general — se requiere clasificación arancelaria precisa",
-      dutyRate: 16,
-      precision: "GENERIC_FALLBACK",
-      precisionLabel: "Genérico (solo estimación)",
-      confidence: "low",
-      warnings: ["No se pudo clasificar el producto: el 16% es un valor genérico de estimación. Cargá el HS/NCM, elegí una categoría o ingresá el arancel manualmente."],
-    }));
-    result.requiresManualValidation = true;
-  }
-
+  // ── NIVEL 3: genérico 16% — ÚLTIMA alternativa, nunca se elimina ──
+  result.productDescription = "Producto sin clasificación automática";
+  result.candidates.push(baseCandidate({
+    code: "—",
+    description: "Producto general — se requiere clasificación arancelaria precisa",
+    dutyRate: 16,
+    precision: "GENERIC_FALLBACK",
+    precisionLabel: "Genérico (solo estimación)",
+    confidence: "low",
+    warnings: ["No se pudo clasificar el producto: el 16% es un valor genérico de estimación. Cargá el HS/NCM, elegí una categoría o ingresá el arancel manualmente."],
+  }));
+  result.requiresManualValidation = true;
   result.selected = result.candidates[0];
   return result;
 }

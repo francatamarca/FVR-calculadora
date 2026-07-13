@@ -2,20 +2,20 @@ import { describe, it, expect } from "vitest";
 import { classifyCode, classifyProduct, toLegacyShape, TARIFF_SOURCE } from "../src/lib/tariffEngine.js";
 
 describe("classifyCode — precisión por dígitos", () => {
-  it("NCM 8 dígitos → resuelve por la TEC OFICIAL (10.515 posiciones)", () => {
+  it("NCM 8 dígitos → resuelve por el DIE OFICIAL de ARCA (Arancel Integrado)", () => {
     const r = classifyCode("9304.00.90");
     const c = r.selected;
-    expect(c.dutyRate).toBe(20);                 // airsoft: AEC extrazona (coincide con VUCE)
+    expect(c.dutyRate).toBe(20);                 // airsoft: DIE extrazona vigente
     expect(c.precision).toBe("NCM_8_OFICIAL");
     expect(c.confidence).toBe("high");
     expect(c.dutyType).toBe("DIE_EXTRAZONA");
-    expect(c.source).toMatch(/TEC\/AEC.*oficial/i);
+    expect(c.source).toMatch(/DIE oficial ARCA/i);
     expect(c.sourceDate).toBe(TARIFF_SOURCE.date);
   });
-  it("capa 1 — excepciones argentinas: celulares y notebooks 0%, autos 35%", () => {
-    expect(classifyCode("8517.13.00").selected.dutyRate).toBe(0);   // celulares Dec.333/2025 (AEC dice 16)
-    expect(classifyCode("8471.30.12").selected.dutyRate).toBe(0);   // notebooks (AEC dice 16 BIT)
-    expect(classifyCode("8703.23.10").selected.dutyRate).toBe(35);  // autos: régimen automotor (AEC dice 20)
+  it("capa 1 — excepciones argentinas: celulares 0%, autos 35%; notebooks 16% (ARCA)", () => {
+    expect(classifyCode("8517.13.00").selected.dutyRate).toBe(0);   // celulares Dec.333/2025 (0% desde 15/01/2026)
+    expect(classifyCode("8471.30.12").selected.dutyRate).toBe(16);  // notebooks: DIE real ARCA 13/07/2026 (el 0% BIT no está vigente)
+    expect(classifyCode("8703.23.10").selected.dutyRate).toBe(35);  // autos: régimen automotor
     expect(classifyCode("8703.23.10").selected.source).toMatch(/argentina/i);
   });
   it("capa 2 — Dec. 236/2025: remeras a 20% aunque el AEC oficial diga 35%", () => {
@@ -63,23 +63,23 @@ describe("classifyProduct — matching y sinónimos", () => {
   it("airsoft → cap. 93, 20%", () => {
     expect(classifyProduct("pistola airsoft").selected.dutyRate).toBe(20);
   });
-  it("notebook → 0% (régimen informática)", () => {
-    expect(classifyProduct("notebook lenovo").selected.dutyRate).toBe(0);
+  it("notebook → 16% (DIE real ARCA — el 0% informática no está vigente en aduana)", () => {
+    expect(classifyProduct("notebook lenovo").selected.dutyRate).toBe(16);
   });
   it("sinónimo: collar GPS para mascotas resuelve a dispositivo de transmisión (0% BIT)", () => {
     const r = classifyProduct("collar GPS para mascotas");
     expect(r.selected.dutyRate).toBe(0);
   });
-  it("sinónimo: inmovilizador de rodilla → artículo ortopédico 9021 (0%)", () => {
+  it("sinónimo: inmovilizador de rodilla → artículo ortopédico 9021 (12.6% DIE ARCA)", () => {
     const r = classifyProduct("inmovilizador de rodilla");
-    expect(r.selected.dutyRate).toBe(0);
+    expect(r.selected.dutyRate).toBe(12.6); // DIE oficial ARCA 9021.10.10 (corrige el 0% de la tabla manual)
     expect(r.selected.code).toMatch(/^9021/);
   });
   it("herramienta quirúrgica → material médico (6%)", () => {
     expect(classifyProduct("herramienta quirurgica").selected.dutyRate).toBe(6);
   });
-  it("silla de ruedas → 8713 (8%)", () => {
-    expect(classifyProduct("silla de ruedas").selected.dutyRate).toBe(8);
+  it("silla de ruedas → 8713 (10.8% DIE ARCA)", () => {
+    expect(classifyProduct("silla de ruedas").selected.dutyRate).toBe(10.8); // DIE oficial ARCA 8713.10.00
   });
   it("producto irreconocible → fallback genérico con advertencia y validación manual", () => {
     const r = classifyProduct("xyzzy frobnicator cuántico");

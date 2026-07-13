@@ -1,0 +1,41 @@
+# Actualización automática de la base arancelaria (DIE ARCA)
+# - Corre todos los lunes a las 09:00 AR (12:00 UTC) y a demanda.
+# - Descarga el arancel.zip oficial, regenera la base y corre los tests.
+# - Si hay cambios, abre un PULL REQUEST: nunca publica solo — Francisco
+#   revisa el diff y mergea (el merge dispara el deploy de Vercel).
+# - Si la fuente falla o los datos son inconsistentes, el script sale con
+#   error, no se toca nada y el run queda en rojo como alerta.
+name: tariff-update
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Actualizar base arancelaria desde ARCA
+        run: node scripts/update-tariff-base.mjs
+      - name: Abrir PR si hay cambios
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Base arancelaria: actualización automática desde ARCA"
+          title: "📊 Actualización de base arancelaria (DIE ARCA)"
+          body: |
+            Actualización automática desde el Arancel Integrado de ARCA.
+            - Ver `data/tariff-history/CHANGELOG.md` para el resumen del diff.
+            - Tests corridos en el pipeline antes de generar este PR (35+ verdes).
+            - Revisar y mergear para publicar (el merge despliega en Vercel).
+          branch: tariff-update
+          delete-branch: true

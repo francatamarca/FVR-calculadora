@@ -205,22 +205,40 @@ export const CHAPTER_DESC = {
 };
 
 // ── Product keyword → rate mapping ───────────────────────────────────────
+// Matching por PALABRA COMPLETA (ver tariffEngine/textNorm) — nunca substring.
+// `not`: tokens que descartan la regla (contexto incompatible).
+// Los `rate` de las reglas con NCM de 8 díg se re-resuelven contra la base
+// oficial al momento de clasificar; el valor acá es fallback documentado.
 export const KEYWORD_RULES = [
+  // ── Reglas curadas 2026-07 (aranceles verificados contra la TEC oficial de 8 dígitos) ──
+  { k:["camara de bicicleta","camara de rueda","camara de moto","camara de auto neumatico"], hs:"4013.20.00", rate:16, desc:"Cámaras de caucho (neumáticos)" },
+  { k:["control remoto","radiotelemando","telemando","control para tv"], hs:"8526.92.00", rate:18, desc:"Aparatos de radiotelemando (controles remotos)" },
+  { k:["motosierra","sierra de cadena","chainsaw"], hs:"8467.81.00", rate:9, desc:"Motosierra (sierra de cadena)" },
+  { k:["termo","vaso termico","botella termica","termo de acero"], hs:"9617.00.10", rate:18, desc:"Termos y demás recipientes isotérmicos" },
+  { k:["sombrero","gorra","gorro","boina"], hs:"6505.00.22", rate:20, desc:"Sombreros, gorras y demás tocados" },
+  { k:["reloj despertador","despertador"], hs:"9105.11.00", rate:20, desc:"Despertadores" },
+  { k:["caloventor","calefactor","estufa electrica","panel calefactor"], hs:"8516.29.00", rate:20, desc:"Calefactores eléctricos de ambiente" },
+  { k:["compresor de aire","compresor"], hs:"8414.80.11", rate:12.6, desc:"Compresores de aire" },
+  { k:["filtro de agua","purificador de agua","filtro purificador","osmosis inversa"], hs:"8421.21.00", rate:12.6, desc:"Aparatos para filtrar o depurar agua" },
+  { k:["skimmer","filtro de acuario","bomba de acuario","filtro para pecera"], hs:"8421.21.00", rate:12.6, desc:"Filtros/depuradores de agua (acuarios y piscinas)" },
+  { k:["camara wifi","camara ip","camara de seguridad","camara de vigilancia","webcam","camara web"], hs:"8525.89.19", rate:20, desc:"Cámaras de vigilancia / IP" },
+  { k:["microfono","microfono inalambrico"], hs:"8518.10.90", rate:20, desc:"Micrófonos" },
+  { k:["cabeza de cilindro","tapa de cilindros","culata"], hs:"8409.91.90", rate:16, desc:"Partes de motores — culatas / cabezas de cilindro" },
   // Airsoft / armas de aire comprimido y réplicas (cap. 93 — AEC extrazona 20%)
   { k:["airsoft","air soft","replica airsoft","replica de arma","pistola airsoft","pistola de airsoft","rifle airsoft","rifle de airsoft","marcadora","paintball","gotcha","arma de aire comprimido","pistola de aire comprimido","rifle de aire comprimido","rifle de aire","pistola de aire","arma de co2","co2 pistola","balin","balines","postas","municion airsoft","bbs airsoft","bolitas airsoft"], hs:"9304.00.90", rate:20, desc:"Arma de aire comprimido / airsoft (réplica)" },
   // Computing (0%)
-  { k:["laptop","notebook","computadora portatil","macbook","ultrabook"], hs:"8471.30.19", rate:0, desc:"Computadora portátil" },
-  { k:["computadora de escritorio","desktop","pc escritorio","tower pc"], hs:"8471.41.90", rate:0, desc:"Computadora de escritorio" },
-  { k:["tablet","ipad","tableta","ipad pro"], hs:"8471.30.11", rate:0, desc:"Tableta electrónica" },
+  { k:["laptop","notebook","computadora portatil","macbook","ultrabook"], hs:"8471.30.19", rate:16, desc:"Computadora portátil" },
+  { k:["computadora de escritorio","desktop","pc escritorio","tower pc"], hs:"8471.50.10", rate:0, desc:"Computadora de escritorio" },
+  { k:["tablet","ipad","tableta","ipad pro"], hs:"8471.30.11", rate:16, desc:"Tableta electrónica" },
   { k:["mouse","raton inalambrico","trackpad"], hs:"8471.60.50", rate:0, desc:"Mouse para computadora" },
-  { k:["teclado","keyboard","teclado mecanico","teclado inalambrico"], hs:"8471.60.20", rate:0, desc:"Teclado" },
+  { k:["teclado","keyboard","teclado mecanico","teclado inalambrico"], hs:"8471.60.52", rate:0, desc:"Teclado" },
   { k:["pendrive","memoria usb","usb flash","disco ssd externo","disco rigido externo","disco duro externo"], hs:"8471.70.90", rate:0, desc:"Dispositivo de almacenamiento" },
-  { k:["componente electronico","microprocesador","chip","circuito integrado","gpu","cpu","placa madre"], hs:"8542.31.00", rate:0, desc:"Componentes electrónicos" },
+  { k:["componente electronico","microprocesador","chip","circuito integrado","gpu","cpu","placa madre"], hs:"8542.31.20", rate:0, desc:"Componentes electrónicos" },
   { k:["impresora","printer","plotter"], hs:"8443.31.10", rate:14, desc:"Impresora" },
   { k:["scanner","escaner"], hs:"8443.31.90", rate:14, desc:"Escáner" },
   // Communications (0%)
   { k:["celular","smartphone","iphone","telefono inteligente","android","samsung galaxy","telefono movil"], hs:"8517.12.20", rate:0, desc:"Teléfono celular inteligente" },
-  { k:["router","modem","wifi"], hs:"8517.62.90", rate:0, desc:"Equipo de red y comunicaciones" },
+  { k:["router","modem","wifi"], hs:"8517.62.41", rate:0, desc:"Equipo de red y comunicaciones" },
   // Audio/Video
   { k:["auricular","audifonos","headphone","earphone","airpod","auriculares inalambricos","in ear"], hs:"8518.30.00", rate:20, desc:"Auriculares" },
   { k:["parlante","altavoz","speaker","bocina","subwoofer","sonido"], hs:"8518.22.00", rate:20, desc:"Parlantes o altavoces" },
@@ -234,7 +252,7 @@ export const KEYWORD_RULES = [
   // Drone
   { k:["drone","dron","cuadricoptero","uav","fpv"], hs:"8806.21.00", rate:0, desc:"Aeronave no tripulada (drone)" },
   // Watches
-  { k:["smartwatch","apple watch","reloj inteligente","watch fitness","fitbit"], hs:"8517.62.30", rate:0, desc:"Reloj inteligente / smartwatch" },
+  { k:["smartwatch","apple watch","reloj inteligente","watch fitness","fitbit"], hs:"8517.62.49", rate:0, desc:"Reloj inteligente / smartwatch" },
   { k:["reloj pulsera","reloj de mano","watch","casio","seiko","tissot","swatch"], hs:"9102.12.00", rate:20, desc:"Reloj de pulsera" },
   // Clothing (35%)
   { k:["remera","camiseta","t-shirt","polo shirt"], hs:"6109.10.00", rate:20, desc:"Remeras y camisetas" },
@@ -296,7 +314,7 @@ export const KEYWORD_RULES = [
   { k:["cartera","bolso","handbag","purse"], hs:"4202.22.00", rate:18, desc:"Carteras y bolsos" },
   // Jewelry & accessories
   { k:["joya","joyeria","collar de oro","pulsera de oro","anillo de oro","pendiente de oro","aretes"], hs:"7113.19.00", rate:18, desc:"Joyería de metales preciosos" },
-  { k:["bisuteria","joyeria de fantasia","collar","pulsera","anillo","aro","arete"], hs:"7117.19.00", rate:18, desc:"Bisutería y joyería de fantasía" },
+  { k:["bisuteria","joyeria de fantasia","collar","pulsera","anillo","aro","arete"], not:["goma","caucho","industrial","junta","motor","valvula","hidraulico","retencion"], hs:"7117.19.00", rate:18, desc:"Bisutería y joyería de fantasía" },
   // Musical instruments
   { k:["guitarra","bajo electrico","ukelele","violin","cello"], hs:"9207.10.00", rate:16, desc:"Instrumento musical de cuerda" },
   { k:["teclado musical","piano digital","sintetizador","midi","bateria electronica"], hs:"9207.90.00", rate:16, desc:"Instrumento musical electrónico" },

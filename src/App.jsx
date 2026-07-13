@@ -1,5 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { DEF, calculate, compareModes } from "./lib/calc.js";
+// Meta de la base arancelaria (archivo chico generado por el pipeline —
+// NO importa la base completa al cliente, solo fecha/fuente)
+import { TARIFF_META } from "./data/tariffMeta.js";
 
 // Charts del admin en chunk aparte: los clientes no descargan recharts (~250 KB)
 const AdminCharts = lazy(() => import("./AdminCharts.jsx"));
@@ -614,7 +617,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", paisOrigen:"", origenSel:"", fob:"",
     categoria:"", manualDuty:"", dutyManual:false,
     tipo:"avion", subTipo:"comercial", seaMode:"m3", peso:"", largo:"", ancho:"", alto:"",
-    m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: ""
+    m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null
   });
   const [errors, setErrors]       = useState({});
   const [fileNames, setFileNames] = useState([]);
@@ -623,6 +626,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const [touched, setTouched]     = useState(false);
   const [aiLoading, setAiLoading] = useState(null); // null | "product" | "hs"
   const [aiResult, setAiResult]   = useState(null);
+  const [altOpen, setAltOpen]     = useState(false); // "Ver alternativas" del clasificador
   const [catQuery, setCatQuery]   = useState("");
   const [catOpen, setCatOpen]     = useState(false);
 
@@ -649,6 +653,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         aiDutyRate: cat.rate,
         manualDuty: "", dutyManual: false,
         aiSuggestion: `Categoría: ${label} — Derecho de importación ${cat.rate}%`,
+        aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: `categoria:${label}` } : f.aiTelemetry,
       }));
     } else {
       // "Seleccionar…": vuelve a usar IA / HS Code / valor por defecto
@@ -664,13 +669,28 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       setForm(f => ({ ...f, manualDuty:"", dutyManual:false, aiDutyRate: f.categoria ? f.aiDutyRate : null }));
     } else {
       setCatQuery(""); setAiResult(null);
-      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", aiSuggestion: `Arancel ingresado manualmente: ${v}%` }));
+      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", aiSuggestion: `Arancel ingresado manualmente: ${v}%`,
+        // telemetría: el cliente pisó el resultado del clasificador con un % manual
+        aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: `manual:${v}%` } : f.aiTelemetry }));
     }
+  };
+
+  // El cliente eligió una de las alternativas sugeridas: se aplica ese código
+  // (queda registrado en telemetría como corrección manual del resultado IA)
+  const applyAlternative = (alt) => {
+    setAiResult(r => ({ ...r, hsCode: alt.hsCode, dutyRate: alt.dutyRate, description: alt.description || r.description, officialDesc: alt.description, motivo: null, confidence: "media" }));
+    setAltOpen(false);
+    setForm(f => ({
+      ...f, hsCode: alt.hsCode, aiDutyRate: alt.dutyRate, categoria: "", manualDuty: "", dutyManual: false,
+      aiSuggestion: `${alt.description || alt.hsCode} — Derecho de importación: ${alt.dutyRate}% (alternativa elegida por el cliente)`,
+      aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: alt.hsCode } : f.aiTelemetry,
+    }));
   };
 
   const handleAnalyzeProduct = async () => {
     if (!form.producto.trim() || aiLoading) return;
     setAiLoading("product");
+    setAltOpen(false);
     try {
       const result = await analyzeProduct(form.producto);
       setAiResult(result);
@@ -679,7 +699,14 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         categoria: "", manualDuty: "", dutyManual: false,
         hsCode: result.hsCode || f.hsCode,
         aiDutyRate: result.dutyRate ?? null,
-        aiSuggestion: `${result.description} — Derecho de importación: ${result.dutyRate}% (confianza: ${result.confidence})`
+        aiSuggestion: `${result.description} — Derecho de importación: ${result.dutyRate}% (confianza: ${result.confidence})`,
+        // Telemetría del clasificador (Fase 10): viaja con el lead, sin datos sensibles
+        aiTelemetry: {
+          query: f.producto.slice(0, 120), method: result.method || null, chosen: result.hsCode,
+          confidence: result.confidence, precision: result.precision, source: (result.source || "").slice(0, 90),
+          generic16: result.precision === "GENERIC_FALLBACK", alternativesShown: (result.alternatives || []).length,
+          ts: Date.now(), corrected: false,
+        },
       }));
     } catch (e) {
       setAiResult({ error: true });
@@ -1001,12 +1028,31 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:10, marginBottom:16, fontSize:12 }}>
               <p style={{ fontWeight:700, color:"#166534", marginBottom:4 }}>✅ Clasificación arancelaria</p>
               <p style={{ color:"#15803d" }}>📋 {aiResult.description}</p>
-              <p style={{ color:"#15803d" }}>🔢 Código: <strong>{aiResult.hsCode}</strong>{aiResult.precisionLabel ? <span style={{ color:"#64748b" }}> · {aiResult.precisionLabel}</span> : null}</p>
-              <p style={{ color:"#15803d" }}>📊 Derecho de importación: <strong>{aiResult.dutyRate}%</strong> — confianza: {aiResult.confidence}</p>
+              {aiResult.officialDesc && aiResult.officialDesc !== aiResult.description && (
+                <p style={{ color:"#15803d", fontSize:11 }}>📖 Descripción oficial: {aiResult.officialDesc.length > 140 ? aiResult.officialDesc.slice(0, 140) + "…" : aiResult.officialDesc}</p>
+              )}
+              <p style={{ color:"#15803d" }}>🔢 NCM probable: <strong>{aiResult.hsCode}</strong>{aiResult.precisionLabel ? <span style={{ color:"#64748b" }}> · {aiResult.precisionLabel}</span> : null}</p>
+              <p style={{ color:"#15803d" }}>📊 Derecho de importación: <strong>{aiResult.dutyRate}%</strong> — precisión: {aiResult.precision === "FAMILY_ESTIMATE" ? "estimación por categoría" : aiResult.precision === "GENERIC_FALLBACK" ? "genérica" : aiResult.confidence}</p>
+              {aiResult.motivo && <p style={{ fontSize:11, color:"#64748b" }}>💬 {aiResult.motivo}</p>}
               <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>
                 🏷️ {aiResult.dutyType === "DIE_EXTRAZONA" ? "Derecho EXTRAZONA (aplica a China/USA — no es el intrazona Mercosur)" : ""}
-                {aiResult.source ? ` · Fuente: ${aiResult.source}` : ""}{aiResult.sourceDate ? ` (${aiResult.sourceDate})` : ""}
+                {aiResult.source ? ` · Fuente: ${aiResult.source}` : ""} · Base arancelaria actualizada al {(aiResult.baseDate || aiResult.sourceDate || "").split("-").reverse().join("/")}
               </p>
+              {(aiResult.alternatives || []).length > 0 && (
+                <div style={{ marginTop:6 }}>
+                  <button onClick={() => setAltOpen(o => !o)}
+                    style={{ background:"none", border:"1px solid #86efac", borderRadius:8, padding:"4px 10px", fontSize:11, fontWeight:700, color:"#166534", cursor:"pointer" }}>
+                    {altOpen ? "▲ Ocultar alternativas" : `▼ Ver alternativas (${aiResult.alternatives.length})`}
+                  </button>
+                  {altOpen && aiResult.alternatives.map((alt, i) => (
+                    <button key={i} onClick={() => applyAlternative(alt)}
+                      style={{ display:"flex", justifyContent:"space-between", gap:8, width:"100%", textAlign:"left", marginTop:6, background:"white", border:"1px solid #dbe8f6", borderRadius:8, padding:"6px 10px", fontSize:11, cursor:"pointer", color:"#334155" }}>
+                      <span><strong>{alt.hsCode}</strong> — {(alt.description || "").slice(0, 90)}</span>
+                      <span style={{ fontWeight:800, color:"#0f3d68", flexShrink:0 }}>{alt.dutyRate}%</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {(aiResult.warnings || []).map((w, i) => (
                 <p key={i} style={{ fontSize:11, color:"#b45309", marginTop:4 }}>⚠ {w}</p>
               ))}
@@ -1168,6 +1214,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           <a href="https://www.fvrlogistica.com.ar" target="_blank" rel="noreferrer" style={{ color:"#18548a" }}>🌐 fvrlogistica.com.ar</a>
           <a href="https://linktr.ee/FVRcomex" target="_blank" rel="noreferrer" style={{ color:"#18548a" }}>🔗 Linktree</a>
         </div>
+        {TARIFF_META.baseDate && (
+          <p style={{ fontSize:11, color:"#b0bccb", marginTop:10 }}>
+            Base arancelaria oficial (ARCA) actualizada al {TARIFF_META.baseDate.split("-").reverse().join("/")}
+          </p>
+        )}
       </footer>
       <WAFloat />
     </div>
@@ -1748,6 +1799,35 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Promedio</p><p style={{ fontSize:20, fontWeight:900, color:"#0f3d68" }}>{quotes.length?USD(quotes.reduce((s,q)=>s+(q.results?.totalGen||0),0)/quotes.length):USD(0)}</p></div>
               <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7" }}><p style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>Tipo más elegido</p><p style={{ fontSize:20, fontWeight:900, color:"#0f3d68" }}>{quotes.filter(q=>q.importType==="avion").length>=quotes.filter(q=>q.importType==="barco").length?"✈️ Avión":"Barco"}</p></div>
             </div>
+
+            {/* Telemetría del clasificador arancelario (Fase 10): detecta dónde
+                falla — productos que caen al 16%, correcciones del cliente, etc. */}
+            {(() => {
+              const tel = quotes.map(q => q.formData?.aiTelemetry).filter(Boolean);
+              if (!tel.length) return null;
+              const g16 = tel.filter(t => t.generic16);
+              const corr = tel.filter(t => t.corrected);
+              return (
+                <div style={{ background:"white", borderRadius:16, padding:16, border:"1px solid #eef2f7", marginBottom:24 }}>
+                  <p style={{ fontWeight:700, fontSize:13, color:"#334155", marginBottom:10 }}>🤖 Clasificador arancelario ({tel.length} análisis en leads)</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, fontSize:12 }}>
+                    <div><p style={{ color:"#64748b" }}>Cayeron al 16% genérico</p><p style={{ fontWeight:900, fontSize:18, color: g16.length ? "#b45309" : "#15803d" }}>{g16.length} ({Math.round(g16.length/tel.length*100)}%)</p></div>
+                    <div><p style={{ color:"#64748b" }}>Corregidos por el cliente</p><p style={{ fontWeight:900, fontSize:18, color:"#0f3d68" }}>{corr.length}</p></div>
+                    <div><p style={{ color:"#64748b" }}>Vía IA + candidatos</p><p style={{ fontWeight:900, fontSize:18, color:"#0f3d68" }}>{tel.filter(t=>t.method==="ia-candidatos").length}</p></div>
+                  </div>
+                  {g16.length > 0 && (
+                    <p style={{ fontSize:11, color:"#b45309", marginTop:10 }}>
+                      Sin clasificar (candidatos a nuevas reglas): {[...new Set(g16.map(t=>t.query))].slice(0,8).join(" · ")}
+                    </p>
+                  )}
+                  {corr.length > 0 && (
+                    <p style={{ fontSize:11, color:"#64748b", marginTop:6 }}>
+                      Correcciones: {corr.slice(0,5).map(t=>`"${t.query}" → ${t.correctedTo}`).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

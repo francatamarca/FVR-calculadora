@@ -78,9 +78,35 @@ const buildCandidates = (value, localFlat) => {
   return out.slice(0, 15);
 };
 
-const buildAlternatives = (candidates, chosenCode, max = 3) =>
-  candidates.filter((c) => c.code8 !== chosenCode).slice(0, max)
-    .map((c) => ({ hsCode: fmtCode(c.code8), description: c.desc, dutyRate: c.rate }));
+/* Alternativas ÚTILES: máximo una por partida (las hermanas de una misma
+   partida sin descripción específica se ven idénticas y no aportan nada)
+   y distintas de la partida elegida cuando hay opciones de sobra. */
+const buildAlternatives = (candidates, chosenCode, max = 3) => {
+  const chosenP4 = (chosenCode || "").slice(0, 4);
+  const seenP4 = new Set();
+  const out = [];
+  // primera pasada: partidas distintas a la elegida
+  for (const c of candidates) {
+    if (c.code8 === chosenCode) continue;
+    const p4 = c.code8.slice(0, 4);
+    if (p4 === chosenP4 || seenP4.has(p4)) continue;
+    seenP4.add(p4);
+    out.push(c);
+    if (out.length >= max) break;
+  }
+  // segunda pasada: si faltan, aceptar hermanas de la elegida (una sola)
+  if (out.length < max) {
+    for (const c of candidates) {
+      if (c.code8 === chosenCode || out.includes(c)) continue;
+      const p4 = c.code8.slice(0, 4);
+      if (seenP4.has(p4)) continue;
+      seenP4.add(p4);
+      out.push(c);
+      if (out.length >= max) break;
+    }
+  }
+  return out.map((c) => ({ hsCode: fmtCode(c.code8), description: c.desc, dutyRate: c.rate }));
+};
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -166,12 +192,14 @@ Respondé ÚNICAMENTE JSON sin markdown:
         flat.baseDate = NCM_DESC_META.date || TARIFF_SOURCE.date;
         flat.source = `Clasificación IA entre ${candidates.length} posiciones oficiales + arancel de ${TARIFF_SOURCE.shortName}`;
         flat.motivo = String(parsed.motivo || "").slice(0, 120);
+        // Alternativas: las que priorizó la IA primero, el resto de candidatos
+        // después — TODAS pasan por el dedupe por partida (sin triplicados
+        // idénticos de posiciones hermanas sin descripción propia)
         const altIdx = Array.isArray(parsed.alternativas) ? parsed.alternativas : [];
-        const altCodes = altIdx.filter((n) => Number.isInteger(n) && n >= 1 && n <= candidates.length && n !== idx)
-          .map((n) => candidates[n - 1].code8);
-        flat.alternatives = altCodes.length
-          ? altCodes.slice(0, 3).map((c8) => ({ hsCode: fmtCode(c8), description: (NCM_DESC[c8] || "").slice(0, 160), dutyRate: toLegacyShape(classifyCode(c8)).dutyRate }))
-          : buildAlternatives(candidates, chosen.code8);
+        const iaAlts = altIdx.filter((n) => Number.isInteger(n) && n >= 1 && n <= candidates.length && n !== idx)
+          .map((n) => candidates[n - 1]);
+        const resto = candidates.filter((c) => !iaAlts.includes(c));
+        flat.alternatives = buildAlternatives([...iaAlts, ...resto], chosen.code8);
         flat.warnings = [
           "Posición elegida por IA entre candidatos de la nomenclatura oficial — confirmar con despachante.",
           ...flat.warnings,

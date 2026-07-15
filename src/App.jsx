@@ -452,45 +452,58 @@ const WAFloat = () => (
   </a>
 );
 
-/* ── HEADER (hero integrado — la calculadora ES la página principal) ── */
+/* ── HEADER ──────────────────────────────────────────────────
+   Barra superior navy (logo + dólar + admin) en todas las pantallas.
+   Hero de MARCA solo en el inicio (compact lo oculta en resultados):
+   fondo claro con el "mesh" de FVR Sourcing (radiales naranja/azul/verde),
+   logo real, título con el gradiente firma. Mobile-first (clamp + wrap). */
 const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compact }) => (
-  <header style={{ background: "linear-gradient(150deg,#0b2f52 0%,#0f3d68 55%,#18548a 100%)", color:"white" }}>
-    <div style={{ maxWidth:900, margin:"0 auto", padding:"16px 16px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        <img src="/logo-fvr.jpg" alt="FVR Logística Internacional" style={{ width:46, height:46, borderRadius:12, background:"white", padding:3, objectFit:"contain", boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }} />
-        <div>
-          <div style={{ fontWeight:800, fontSize:15, letterSpacing:.2 }}>FVR Logística Internacional</div>
-          <div style={{ color:"#b9cee2", fontSize:11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
+  <header>
+    <div style={{ background:"linear-gradient(135deg,#0b2f52,#0f3d68)", color:"white" }}>
+      <div style={{ maxWidth:900, margin:"0 auto", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <img src="/logo-fvr.jpg" alt="FVR Logística Internacional" style={{ width:42, height:42, borderRadius:11, background:"white", padding:3, objectFit:"contain", boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }} />
+          <div>
+            <div style={{ fontWeight:800, fontSize:15, letterSpacing:.2 }}>FVR Logística Internacional</div>
+            <div style={{ color:"#b9cee2", fontSize:11 }}>Importaciones a Argentina · fvrlogistica.com.ar</div>
+          </div>
         </div>
-      </div>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
-          <span style={{ color:"#b9cee2" }}>Dólar oficial:</span>
-          <span style={{ fontWeight:700 }}>
-            {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}} title="Sin conexión con las fuentes de cotización — se usa la última conocida">{`$${fmt(dolar, 2)} ⚠`}</span> : `$${fmt(dolar, 2)}`}
-          </span>
-          <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#b9cee2", cursor:"pointer", fontSize:14 }}>↺</button>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12, display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ color:"#b9cee2" }}>Dólar oficial:</span>
+            <span style={{ fontWeight:700 }}>
+              {dolarLoading ? "…" : dolarErr ? <span style={{color:"#fcd34d"}} title="Sin conexión con las fuentes de cotización — se usa la última conocida">{`$${fmt(dolar, 2)} ⚠`}</span> : `$${fmt(dolar, 2)}`}
+            </span>
+            <button onClick={onRefreshDolar} aria-label="Actualizar cotización del dólar" style={{ background:"none", border:"none", color:"#b9cee2", cursor:"pointer", fontSize:14 }}>↺</button>
+          </div>
+          <button onClick={onAdmin} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer" }}>
+            Panel Admin
+          </button>
         </div>
-        <button onClick={onAdmin} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", borderRadius:8, padding:"6px 14px", fontSize:12, cursor:"pointer" }}>
-          Panel Admin
-        </button>
       </div>
     </div>
     {!compact && (
-      <div style={{ maxWidth:900, margin:"0 auto", padding:"18px 16px 34px", textAlign:"center" }}>
-        <div style={{ display:"inline-block", background:"rgba(242,108,30,0.18)", border:"1px solid rgba(251,146,60,0.4)", borderRadius:99, padding:"4px 16px", marginBottom:14 }}>
-          <span style={{ color:"#ffb27a", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>Cotizador de importaciones</span>
-        </div>
-        <h1 style={{ fontSize:"clamp(26px, 5.5vw, 36px)", fontWeight:900, marginBottom:10, lineHeight:1.2 }}>
-          Cotizá tu importación de <span style={{ color:"#ffb27a" }}>China</span> a Argentina
-        </h1>
-        <p style={{ color:"#dbe8f6", fontSize:15, maxWidth:560, margin:"0 auto", lineHeight:1.5 }}>
-          Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
-        </p>
-        <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
-          {["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"].map(c => (
-            <span key={c} style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.18)", borderRadius:99, padding:"5px 14px", fontSize:12, color:"#dbe8f6", fontWeight:600 }}>{c}</span>
-          ))}
+      <div style={{
+        background: "radial-gradient(55% 65% at 88% 0%, rgba(253,184,19,0.17), transparent 62%), radial-gradient(45% 60% at 0% 30%, rgba(30,111,176,0.11), transparent 58%), radial-gradient(42% 48% at 50% 118%, rgba(61,169,53,0.09), transparent 62%), linear-gradient(180deg,#ffffff 0%,#f6f9fc 100%)",
+        borderBottom:"1px solid #e6ebf2", textAlign:"center", padding:"clamp(26px, 6vw, 40px) 16px clamp(24px, 5vw, 34px)" }}>
+        <div style={{ maxWidth:900, margin:"0 auto" }}>
+          <img src="/logo-fvr.jpg" alt="" style={{ width:"clamp(56px, 14vw, 68px)", height:"clamp(56px, 14vw, 68px)", borderRadius:16, objectFit:"contain", background:"white", padding:4, border:"1px solid #eef2f7", boxShadow:"0 10px 30px -8px rgba(11,47,82,0.22)", marginBottom:12 }} />
+          <p style={{ fontSize:11, fontWeight:800, letterSpacing:3, textTransform:"uppercase", color:"#18548a", marginBottom:8 }}>
+            Importaciones puerta a puerta
+          </p>
+          <h1 style={{ fontSize:"clamp(25px, 6.4vw, 40px)", fontWeight:900, lineHeight:1.15, color:"#15233b", marginBottom:10, letterSpacing:-0.5 }}>
+            Cotizá tu importación de{" "}
+            <span style={{ background:"linear-gradient(120deg,#f26c1e,#e0610a 55%,#fdb813)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>China</span>
+            {" "}a Argentina
+          </h1>
+          <p style={{ color:"#44546a", fontSize:"clamp(13.5px, 3.7vw, 15.5px)", maxWidth:560, margin:"0 auto", lineHeight:1.55 }}>
+            Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
+          </p>
+          <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
+            {["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"].map(c => (
+              <span key={c} style={{ background:"white", border:"1px solid #e6ebf2", borderRadius:99, padding:"6px 14px", fontSize:12, color:"#334155", fontWeight:700, boxShadow:"0 2px 10px rgba(22,36,58,0.06)" }}>{c}</span>
+            ))}
+          </div>
         </div>
       </div>
     )}
@@ -1301,7 +1314,8 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 
   return (
     <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
-      <Header onAdmin={() => {}} dolar={dolar} dolarErr={false} dolarLoading={false} onRefreshDolar={() => {}} />
+      {/* En resultados el hero no se repite: barra de marca compacta y directo a la cotización */}
+      <Header compact onAdmin={() => {}} dolar={dolar} dolarErr={false} dolarLoading={false} onRefreshDolar={() => {}} />
       {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
 

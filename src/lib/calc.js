@@ -14,7 +14,8 @@ export const DEF = {
   // ── DHL Express (China → Argentina, solo comercial) ──
   // dhlActive: modalidad habilitada (interno siempre la ve si está activa).
   // dhlPublic: visible para clientes en la calculadora pública (feature flag).
-  dhlActive: true, dhlPublic: false,
+  // ACTIVADO públicamente el 30/07/2026 tras validación de Francisco en el interno.
+  dhlActive: true, dhlPublic: true,
   dhlMinKg: 10,            // peso facturable mínimo para ofrecer DHL
   dhlDivisor: 4000,        // divisor volumétrico DHL (NO el 5.000 aéreo)
   dhlRateBreak: 30,        // desde este peso aplica la tarifa alta

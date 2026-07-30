@@ -293,209 +293,10 @@ const buildShortSummary = (d, r, rate, s = {}) => {
 const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · IA" : ""));
 
 const generatePDF = async (d, r, dolar, s) => {
-  const { jsPDF } = await import("jspdf");
-  const autoTableMod = await import("jspdf-autotable");
-  const autoTable = autoTableMod.default || autoTableMod.autoTable;
-
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const M = 14;
-  const navy = [11, 47, 82], accent = [24, 84, 138], sky = [242, 108, 30], gray = [100, 116, 139];
-
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0"), mm = String(now.getMonth() + 1).padStart(2, "0");
-  const fechaStr = `${dd}/${mm}/${now.getFullYear()}`;
-  const venc = new Date(now.getTime() + (+s.validezDias > 0 ? +s.validezDias : 7) * 86400000);
-  const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
-  const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-
-  const tipo = r.isDhl ? "DHL Express · Envío Comercial"
-    : d.tipo === "avion"
-      ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
-      : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
-  const del = r.isDhl ? deliveryEstimate(d.cp, s) : null;
-
-  // Logo (dataURL) — opcional, si falla se usa el texto "FVR"
-  let logoData = null;
-  try {
-    logoData = await fetch("/logo-fvr.jpg").then(res => res.blob()).then(b => new Promise((ok, no) => {
-      const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(b);
-    }));
-  } catch {}
-  // Dólar oficial: si no vino, lo busco al vuelo para mostrar el valor en ARS
-  if (!dolar) {
-    try {
-      const dj = await fetch("https://criptoya.com/api/dolar").then(res => res.json());
-      dolar = dj?.oficial?.ask ?? dj?.oficial?.price ?? null;
-    } catch {}
-  }
-
-  // ── Banda superior ──
-  doc.setFillColor(...navy); doc.rect(0, 0, W, 32, "F");
-  doc.setFillColor(255, 255, 255); doc.roundedRect(M, 6, 20, 20, 2.5, 2.5, "F");
-  if (logoData) {
-    doc.addImage(logoData, "JPEG", M + 1, 7, 18, 18);
-  } else {
-    doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-    doc.text("FVR", M + 10, 18, { align: "center" });
-  }
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
-  doc.text("FVR Logística Internacional", M + 25, 15);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
-  doc.text("Calculadora de Importaciones · www.fvrlogistica.com.ar", M + 25, 21);
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-  doc.text("PRESUPUESTO", W - M, 11, { align: "right" });
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(170, 200, 235);
-  doc.text(`N° ${presNro}`, W - M, 16, { align: "right" });
-  doc.text(`Fecha: ${fechaStr}`, W - M, 20.5, { align: "right" });
-  doc.text(`Válido hasta: ${validez}`, W - M, 25, { align: "right" });
-
-  // ── Cliente ──
-  let y = 41;
-  doc.setTextColor(...navy); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-  doc.text(`Presupuesto para: ${(d.nombre || "").slice(0, 60)}`, M, y);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...gray);
-  doc.text(`${d.producto}  ·  ${tipo}`, M, y + 5.5);
-
-  let cursorY = y + 10;
-  const section = (title, body) => {
-    autoTable(doc, {
-      startY: cursorY,
-      head: [[{ content: title, colSpan: 2 }]],
-      body,
-      theme: "grid",
-      styles: { lineColor: [226, 232, 240], lineWidth: 0.1, cellPadding: 1.7 },
-      headStyles: { fillColor: accent, textColor: 255, fontStyle: "bold", fontSize: 8 },
-      bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { cellWidth: (W - 2 * M) * 0.62 }, 1: { halign: "right", cellWidth: (W - 2 * M) * 0.38 } },
-      margin: { left: M, right: M },
-    });
-    cursorY = doc.lastAutoTable.finalY + 3;
-  };
-
-  section("DATOS DEL CLIENTE Y PRODUCTO", [
-    ["Nombre", d.nombre],
-    ["WhatsApp", d.whatsapp],
-    ["Email", d.email || "—"],
-    ...(d.cp ? [["Código postal de entrega", d.cp]] : []),
-    ["Producto", d.producto],
-    ["País de origen", d.paisOrigen || (r.isDhl ? "China" : "—")],
-    ["HS Code", d.hsCode || "—"],
-    ["Tipo de envío", tipo],
-    ...(del ? [["Entrega estimada", `${del.min} a ${del.max} días hábiles${del.remote ? " · Zona de entrega extendida" : ""}`]] : []),
-  ]);
-
-  const flete = [["FOB / Valor productos", USD(r.fob)]];
-  if (r.isDhl) {
-    flete.push(["Peso real", `${fmt(r.peso)} kg`],
-      [`Peso volumétrico DHL (volumen ÷ ${fmt(r.dhlDivisor, 0)})`, `${fmt(r.pVol)} kg`],
-      ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
-      [`Flete internacional (USD ${r.airRate}/kg)`, USD(r.flete)],
-      [`Seguro (${s.insurance}%)`, USD(r.seguro)]);
-    section("FLETE INTERNACIONAL · DHL EXPRESS", flete);
-    section("BASE ADUANERA", [
-      [`Flete estimado para base aduanera (USD ${r.customsPerKg}/kg)`, USD(r.fleteBase)],
-      [{ content: "Importe utilizado únicamente para estimar la base imponible; no representa un cargo adicional.", colSpan: 2, styles: { fontSize: 7, fontStyle: "italic", textColor: [100, 116, 139] } }],
-      ["CIF / Valor en aduana", USD(r.cif)],
-    ]);
-  } else if (r.isAir) {
-    flete.push(["Peso real", `${r.peso} kg`], ["Peso volumétrico", `${fmt(r.pVol)} kg`],
-      ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
-      [`Tarifa aérea (USD ${r.airRate}/kg)`, USD(r.flete)]);
-  } else if (r.seaKg) {
-    flete.push(["Peso real", `${r.peso} kg`],
-      [`Tarifa marítima (USD ${r.airRate}/kg)`, USD(r.flete)]);
-  } else {
-    flete.push(["Volumen ingresado", `${fmt(r.m3, 3)} m³`],
-      [`Volumen facturable (mín. ${s.seaMin} m³)`, `${fmt(r.m3Fact, 3)} m³`],
-      [`Tarifa marítima (USD ${s.seaRate}/m³)`, USD(r.flete)]);
-  }
-  if (!r.isDhl) {
-    flete.push([`Seguro (${s.insurance}%)`, USD(r.seguro)], ["CIF / Valor en aduana", USD(r.cif)]);
-    section("FLETE INTERNACIONAL", flete);
-  }
-
-  const trib = [];
-  if (r.isPersonal) {
-    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix(d)})${r.fob <= 400 ? " — exento hasta USD 400" : " sobre excedente de USD 400"}`, USD(r.duty)]);
-    trib.push(["Tasa estadística", "No aplica"]);
-    trib.push([`IVA (${s.vat}% sobre FOB + derechos)`, USD(r.iva)]);
-  } else {
-    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix(d)})`, USD(r.duty)]);
-    trib.push([`Tasa estadística (${s.stat}%)`, USD(r.stat)]);
-    trib.push(["Base imponible IVA", USD(r.ivaBase)]);
-    trib.push([`IVA (${s.vat}%)`, USD(r.iva)]);
-  }
-  section("TRIBUTOS ADUANEROS", trib);
-
-  if (r.internalTaxes) {
-    section("IMPUESTOS INTERNOS (BARCO POR M³)", [
-      [`IVA adicional (${s.addVat}%)`, USD(r.addVat)],
-      [`Ganancias (${s.gains}%)`, USD(r.gains)],
-      [`Ingresos Brutos (${s.ib}%)`, USD(r.ib)],
-    ]);
-  }
-
-  if (r.isDhl) {
-    // DHL: único cargo logístico — sin honorarios, pick up ni envío nacional
-    section("SERVICIOS LOGÍSTICOS", [["Handling DHL (único cargo por operación)", USD(r.handling)]]);
-  } else {
-    const serv = [["Pick up / Retiro en origen", USD(r.pickup)]];
-    if (r.hasHandling) serv.push(["Handling", USD(r.handling)]);
-    serv.push(["Envío nacional", USD(r.domestic)], ["Honorarios de Gestión", USD(r.fees)]);
-    section("SERVICIOS LOGÍSTICOS", serv);
-  }
-
-  // ── Caja total ──
-  const boxY = cursorY + 1;
-  const boxH = 27;
-  doc.setFillColor(...navy); doc.roundedRect(M, boxY, W - 2 * M, boxH, 2, 2, "F");
-  // Izquierda: total envío (USD + ARS)
-  doc.setTextColor(170, 200, 235); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-  doc.text(r.isDhl ? "Total del servicio (sin mercadería)" : "Total envío (sin producto)", M + 5, boxY + 7);
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
-  doc.text(USD(r.totalLog), M + 5, boxY + 13.5);
-  if (dolar) {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(170, 200, 235);
-    doc.text(`ARS ${fmt(r.totalLog * dolar, 0)}`, M + 5, boxY + 19.5);
-  }
-  // Derecha: total general (USD grande + ARS destacado)
-  doc.setTextColor(125, 211, 252); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-  doc.text("TOTAL GENERAL DE IMPORTACIÓN", W - M - 5, boxY + 7, { align: "right" });
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-  doc.text(USD(r.totalGen), W - M - 5, boxY + 14.5, { align: "right" });
-  if (dolar) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(125, 211, 252);
-    doc.text(`ARS ${fmt(r.totalGen * dolar, 0)}`, W - M - 5, boxY + 22, { align: "right" });
-  }
-  cursorY = boxY + boxH + 5;
-  if (r.unitario) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...accent);
-    doc.text(`Precio unitario (${r.cantidad} unidades): ${USD(r.unitario)}${dolar ? `  ·  ARS ${fmt(r.unitario * dolar, 0)}` : ""}`, M, cursorY);
-    cursorY += 5;
-  }
-  if (dolar) {
-    doc.setFont("helvetica", "italic"); doc.setFontSize(7); doc.setTextColor(...gray);
-    doc.text(`Conversión al dólar oficial $${fmt(dolar)} del ${fechaStr} · sujeto a variación.`, M, cursorY);
-    cursorY += 4;
-  }
-
-  // ── Legal + footer ──
-  doc.setTextColor(...gray); doc.setFont("helvetica", "italic"); doc.setFontSize(7);
-  const legalLines = doc.splitTextToSize(s.legal, W - 2 * M);
-  doc.text(legalLines, M, cursorY);
-  cursorY += legalLines.length * 2.8 + 4;
-  doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2); doc.line(M, cursorY, W - M, cursorY);
-  cursorY += 5;
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-  doc.text("FVR Logística Internacional · Francisco Vega", M, cursorY);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...gray);
-  doc.text("+54 9 3883372745   ·   francisco@fvrlogistica.com   ·   www.fvrlogistica.com.ar", M, cursorY + 4);
-  doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD con su equivalente en ARS al dólar oficial.`, M, cursorY + 8);
-
-  const safeName = (d.nombre || "cliente").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 40).replace(/\s+/g, "-") || "cliente";
-  doc.save(`Presupuesto-FVR-${safeName}.pdf`);
+  // Layout en src/lib/pdfQuote.js (renderizable también desde Node para revisarlo)
+  const { buildQuotePDF } = await import("./lib/pdfQuote.js");
+  const { doc, filename } = await buildQuotePDF(d, r, dolar, s);
+  doc.save(filename);
 };
 
 /* ── STATUS ──────────────────────────────────────────────── */
@@ -710,7 +511,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     categoria:"", manualDuty:"", dutyManual:false,
     tipo:"avion", subTipo:"comercial", seaMode:"m3", peso:"", largo:"", ancho:"", alto:"",
     m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null,
-    cp:"", bultosIguales: true, packageGroups: []
+    cp:"", bultosIguales: true, packageGroups: [], pesoBulto: ""
   });
   const [errors, setErrors]       = useState({});
   const [fileNames, setFileNames] = useState([]);
@@ -981,8 +782,23 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const rmGroup  = (i) => setForm(f => ({ ...f, packageGroups: f.packageGroups.filter((_, j) => j !== i) }));
   const setIguales = (v) => setForm(f => ({
     ...f, bultosIguales: v,
-    packageGroups: v ? [] : (f.packageGroups?.length ? f.packageGroups : [{ cant: f.bultos || "1", largo: f.largo, ancho: f.ancho, alto: f.alto, pesoCaja: "" }]),
+    packageGroups: v ? [] : (f.packageGroups?.length ? f.packageGroups : [{ cant: f.bultos || "1", largo: f.largo, ancho: f.ancho, alto: f.alto, pesoCaja: f.pesoBulto || "" }]),
   }));
+
+  // Peso por bulto (modo "mismas medidas"): igual que las medidas, el peso es
+  // POR BULTO y el total se calcula solo (peso × cantidad). Editar el total a
+  // mano desvincula el peso por bulto para que no peleen entre sí.
+  const setPesoBulto = (v) => setForm(f => {
+    const cant = +f.bultos > 0 ? +f.bultos : 1;
+    const n = +v;
+    return { ...f, pesoBulto: v, ...(v !== "" && !isNaN(n) ? { peso: String(Math.round(n * cant * 100) / 100) } : {}) };
+  });
+  const setBultosCant = (v) => setForm(f => {
+    const cant = +v > 0 ? +v : 1;
+    const upd = { ...f, bultos: v };
+    if (f.pesoBulto !== "" && !isNaN(+f.pesoBulto)) upd.peso = String(Math.round(+f.pesoBulto * cant * 100) / 100);
+    return upd;
+  });
 
   const rowS = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:16 };
 
@@ -1321,18 +1137,29 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             </>
           )}
           <div style={rowS}>
-            <Field label="Peso real total (kg)" required hint={!form.bultosIguales && (form.packageGroups || []).some(g => +g.pesoCaja > 0) ? "Se calcula solo: Σ cajas × peso por caja (podés ajustarlo)" : undefined}>
+            {form.tipo === "avion" && form.bultosIguales && (
+              <Field label="Peso por bulto (kg)" hint="Como las medidas: es el peso de CADA bulto.">
+                <div style={{ position:"relative" }}>
+                  <Inp type="number" placeholder="0.00" value={form.pesoBulto} onChange={e => setPesoBulto(e.target.value)} style={{ paddingRight:36 }} />
+                  <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
+                </div>
+              </Field>
+            )}
+            {form.bultosIguales && (
+              <Field label="Cantidad de bultos" hint="Multiplica medidas y peso por bulto.">
+                <Inp type="number" placeholder="Ej: 1" value={form.bultos} onChange={e => setBultosCant(e.target.value)} min={1} />
+              </Field>
+            )}
+            <Field label="Peso real total (kg)" required
+              hint={form.bultosIguales && form.pesoBulto !== "" ? "Se calcula solo: peso por bulto × cantidad (podés ajustarlo)."
+                : !form.bultosIguales && (form.packageGroups || []).some(g => +g.pesoCaja > 0) ? "Se calcula solo: Σ cajas × peso por caja (podés ajustarlo)." : undefined}>
               <div style={{ position:"relative" }}>
-                <Inp type="number" placeholder="0.00" value={form.peso} onChange={e => set("peso", e.target.value)} style={{ paddingRight:36 }} />
+                <Inp type="number" placeholder="0.00" value={form.peso}
+                  onChange={e => setForm(f => ({ ...f, peso: e.target.value, pesoBulto: "" }))} style={{ paddingRight:36 }} />
                 <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
               </div>
               {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
             </Field>
-            {form.bultosIguales && (
-              <Field label="Cantidad de bultos" hint="El volumen total multiplica las medidas por esta cantidad.">
-                <Inp type="number" placeholder="Ej: 1" value={form.bultos} onChange={e => set("bultos", e.target.value)} min={1} />
-              </Field>
-            )}
           </div>
 
           {form.tipo === "avion" && formVol > 0 && form.peso && (

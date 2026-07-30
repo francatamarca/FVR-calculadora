@@ -1,5 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { DEF, calculate, compareModes } from "./lib/calc.js";
+import { DEF, calculate, compareModes, packTotals, dhlEligibility } from "./lib/calc.js";
+import { deliveryEstimate } from "./lib/dhlZones.js";
+import { REMOTE_META } from "./data/dhlRemoteZones.js";
 // Meta de la base arancelaria (archivo chico generado por el pipeline —
 // NO importa la base completa al cliente, solo fecha/fuente)
 import { TARIFF_META } from "./data/tariffMeta.js";
@@ -152,6 +154,38 @@ const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,
 
 /* ── WA MESSAGE ─────────────────────────────────────────── */
 const buildWAMsg = (d, r, rate, s) => {
+  if (r.isDhl) {
+    const del = deliveryEstimate(d.cp, s);
+    const lines = [
+      "📦 *Cotizacion DHL Express*",
+      "",
+      "Origen: China 🇨🇳",
+      "Destino: Argentina 🇦🇷",
+      "Modalidad: Envio comercial",
+      "",
+      "Cliente: " + d.nombre,
+      "Producto: " + (d.producto || "-"),
+      "FOB: " + USD(r.fob),
+      "Peso real: " + fmt(r.peso) + " kg",
+      "Peso volumetrico DHL: " + fmt(r.pVol) + " kg",
+      "Peso facturable: " + fmt(r.pFact) + " kg",
+      "",
+      "Flete internacional: " + USD(r.flete),
+      "Seguro: " + USD(r.seguro),
+      "Tributos estimados: " + USD(r.duty + r.stat + r.iva),
+      "Handling DHL: " + USD(r.handling),
+      "",
+      "Demora estimada: " + del.min + " a " + del.max + " dias habiles" + (del.remote ? " — zona de entrega extendida" : ""),
+      "",
+      "Total del servicio: *" + USD(r.totalLog) + "*",
+      "*Total final con mercaderia: " + USD(r.totalGen) + "*",
+      rate ? ("En pesos: ARS " + fmt(r.totalGen * rate, 0) + " (dolar $" + fmt(rate) + ")") : "",
+      "",
+      "Valores estimados sujetos a validacion final.",
+      "FVR Logistica Internacional | +54 9 3883372745",
+    ];
+    return lines.filter(v => v !== undefined && v !== "").join("\n");
+  }
   const tipo = d.tipo === "avion"
     ? `Avion - ${d.subTipo === "personal" ? "Envio Personal (Franquicia)" : "Envio Comercial"}`
     : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m3");
@@ -215,7 +249,26 @@ const buildWAMsg = (d, r, rate, s) => {
 /* ── RESUMEN CORTO (para reenviar al cliente) ──────────────
    Texto comercial breve: total, modalidad y observación clave.
    Lo usa el botón "Copiar resumen" en resultados y en el modo interno. */
-const buildShortSummary = (d, r, rate) => {
+const buildShortSummary = (d, r, rate, s = {}) => {
+  if (r.isDhl) {
+    const del = deliveryEstimate(d.cp, s);
+    return [
+      `*Cotización DHL Express — FVR Logística*`,
+      ``,
+      `📦 ${d.producto || "Producto"} (desde China 🇨🇳)`,
+      `⚡ Peso facturable: ${fmt(r.pFact)} kg · Entrega estimada: ${del.min} a ${del.max} días hábiles${del.remote ? " (zona extendida)" : ""}`,
+      ``,
+      `✈️ Flete internacional: ${USD(r.flete)} · Handling DHL: ${USD(r.handling)}`,
+      `🏛️ Tributos estimados: ${USD(r.duty + r.stat + r.iva)}`,
+      ``,
+      `💵 *Total final con mercadería: ${USD(r.totalGen)}*`,
+      rate ? `🇦🇷 En pesos: ARS ${fmt(r.totalGen * rate, 0)}` : null,
+      r.unitario ? `🔢 Por unidad (${r.cantidad} u.): ${USD(r.unitario)}` : null,
+      ``,
+      `Valores estimados sujetos a validación final.`,
+      `FVR Logística Internacional · +54 9 3883372745`,
+    ].filter(v => v !== null && v !== undefined).join("\n");
+  }
   const tipo = d.tipo === "avion"
     ? (d.subTipo === "personal" ? "Aéreo (envío personal)" : "Aéreo")
     : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
@@ -256,9 +309,11 @@ const generatePDF = async (d, r, dolar, s) => {
   const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
   const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-  const tipo = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
-    : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
+  const tipo = r.isDhl ? "DHL Express · Envío Comercial"
+    : d.tipo === "avion"
+      ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
+      : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
+  const del = r.isDhl ? deliveryEstimate(d.cp, s) : null;
 
   // Logo (dataURL) — opcional, si falla se usa el texto "FVR"
   let logoData = null;
@@ -323,14 +378,28 @@ const generatePDF = async (d, r, dolar, s) => {
     ["Nombre", d.nombre],
     ["WhatsApp", d.whatsapp],
     ["Email", d.email || "—"],
+    ...(d.cp ? [["Código postal de entrega", d.cp]] : []),
     ["Producto", d.producto],
-    ["País de origen", d.paisOrigen || "—"],
+    ["País de origen", d.paisOrigen || (r.isDhl ? "China" : "—")],
     ["HS Code", d.hsCode || "—"],
     ["Tipo de envío", tipo],
+    ...(del ? [["Entrega estimada", `${del.min} a ${del.max} días hábiles${del.remote ? " · Zona de entrega extendida" : ""}`]] : []),
   ]);
 
   const flete = [["FOB / Valor productos", USD(r.fob)]];
-  if (r.isAir) {
+  if (r.isDhl) {
+    flete.push(["Peso real", `${fmt(r.peso)} kg`],
+      [`Peso volumétrico DHL (volumen ÷ ${fmt(r.dhlDivisor, 0)})`, `${fmt(r.pVol)} kg`],
+      ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
+      [`Flete internacional (USD ${r.airRate}/kg)`, USD(r.flete)],
+      [`Seguro (${s.insurance}%)`, USD(r.seguro)]);
+    section("FLETE INTERNACIONAL · DHL EXPRESS", flete);
+    section("BASE ADUANERA", [
+      [`Flete estimado para base aduanera (USD ${r.customsPerKg}/kg)`, USD(r.fleteBase)],
+      [{ content: "Importe utilizado únicamente para estimar la base imponible; no representa un cargo adicional.", colSpan: 2, styles: { fontSize: 7, fontStyle: "italic", textColor: [100, 116, 139] } }],
+      ["CIF / Valor en aduana", USD(r.cif)],
+    ]);
+  } else if (r.isAir) {
     flete.push(["Peso real", `${r.peso} kg`], ["Peso volumétrico", `${fmt(r.pVol)} kg`],
       ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
       [`Tarifa aérea (USD ${r.airRate}/kg)`, USD(r.flete)]);
@@ -342,8 +411,10 @@ const generatePDF = async (d, r, dolar, s) => {
       [`Volumen facturable (mín. ${s.seaMin} m³)`, `${fmt(r.m3Fact, 3)} m³`],
       [`Tarifa marítima (USD ${s.seaRate}/m³)`, USD(r.flete)]);
   }
-  flete.push([`Seguro (${s.insurance}%)`, USD(r.seguro)], ["CIF / Valor en aduana", USD(r.cif)]);
-  section("FLETE INTERNACIONAL", flete);
+  if (!r.isDhl) {
+    flete.push([`Seguro (${s.insurance}%)`, USD(r.seguro)], ["CIF / Valor en aduana", USD(r.cif)]);
+    section("FLETE INTERNACIONAL", flete);
+  }
 
   const trib = [];
   if (r.isPersonal) {
@@ -366,10 +437,15 @@ const generatePDF = async (d, r, dolar, s) => {
     ]);
   }
 
-  const serv = [["Pick up / Retiro en origen", USD(r.pickup)]];
-  if (r.hasHandling) serv.push(["Handling", USD(r.handling)]);
-  serv.push(["Envío nacional", USD(r.domestic)], ["Honorarios de Gestión", USD(r.fees)]);
-  section("SERVICIOS LOGÍSTICOS", serv);
+  if (r.isDhl) {
+    // DHL: único cargo logístico — sin honorarios, pick up ni envío nacional
+    section("SERVICIOS LOGÍSTICOS", [["Handling DHL (único cargo por operación)", USD(r.handling)]]);
+  } else {
+    const serv = [["Pick up / Retiro en origen", USD(r.pickup)]];
+    if (r.hasHandling) serv.push(["Handling", USD(r.handling)]);
+    serv.push(["Envío nacional", USD(r.domestic)], ["Honorarios de Gestión", USD(r.fees)]);
+    section("SERVICIOS LOGÍSTICOS", serv);
+  }
 
   // ── Caja total ──
   const boxY = cursorY + 1;
@@ -377,7 +453,7 @@ const generatePDF = async (d, r, dolar, s) => {
   doc.setFillColor(...navy); doc.roundedRect(M, boxY, W - 2 * M, boxH, 2, 2, "F");
   // Izquierda: total envío (USD + ARS)
   doc.setTextColor(170, 200, 235); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-  doc.text("Total envío (sin producto)", M + 5, boxY + 7);
+  doc.text(r.isDhl ? "Total del servicio (sin mercadería)" : "Total envío (sin producto)", M + 5, boxY + 7);
   doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
   doc.text(USD(r.totalLog), M + 5, boxY + 13.5);
   if (dolar) {
@@ -457,7 +533,7 @@ const WAFloat = () => (
    Hero de MARCA solo en el inicio (compact lo oculta en resultados):
    fondo claro con el "mesh" de FVR Sourcing (radiales naranja/azul/verde),
    logo real, título con el gradiente firma. Mobile-first (clamp + wrap). */
-const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compact }) => (
+const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compact, dhlChip }) => (
   <header>
     <div style={{ background:"linear-gradient(135deg,#0b2f52,#0f3d68)", color:"white" }}>
       <div style={{ maxWidth:900, margin:"0 auto", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
@@ -500,7 +576,10 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compac
             Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
           </p>
           <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
-            {["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"].map(c => (
+            {(dhlChip
+              ? ["✈️ Aéreo y marítimo", "⚡ DHL Express · 5 a 7 días", "📄 Subí tu factura y listo"]
+              : ["✈️ Aéreo y marítimo", "🏛️ Impuestos incluidos", "📄 Subí tu factura y listo"]
+            ).map(c => (
               <span key={c} style={{ background:"white", border:"1px solid #e6ebf2", borderRadius:99, padding:"6px 14px", fontSize:12, color:"#334155", fontWeight:700, boxShadow:"0 2px 10px rgba(22,36,58,0.06)" }}>{c}</span>
             ))}
           </div>
@@ -630,7 +709,8 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", paisOrigen:"", origenSel:"", fob:"",
     categoria:"", manualDuty:"", dutyManual:false,
     tipo:"avion", subTipo:"comercial", seaMode:"m3", peso:"", largo:"", ancho:"", alto:"",
-    m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null
+    m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null,
+    cp:"", bultosIguales: true, packageGroups: []
   });
   const [errors, setErrors]       = useState({});
   const [fileNames, setFileNames] = useState([]);
@@ -753,11 +833,19 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     if (!form.nombre.trim())  e.nombre  = "Ingresá tu nombre";
     if (!form.whatsapp.trim()) e.whatsapp = "Ingresá tu WhatsApp";
     else if (form.whatsapp.replace(/\D/g, "").length < 8) e.whatsapp = "Ingresá un número de WhatsApp válido";
+    if (!form.cp.trim()) e.cp = "Ingresá el código postal de entrega";
     if (!form.producto.trim()) e.producto = "Requerido";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
     else if (+form.fob > 10000000) e.fob = "Valor demasiado alto — revisalo";
     if (!form.peso || +form.peso <= 0) e.peso = "Ingresá el peso total";
-    if (form.tipo === "avion" && (!form.largo || !form.ancho || !form.alto)) e.medidas = "Ingresá largo, ancho y alto";
+    if (form.tipo === "avion") {
+      if (form.bultosIguales) {
+        if (!form.largo || !form.ancho || !form.alto) e.medidas = "Ingresá largo, ancho y alto";
+      } else {
+        const gOk = (form.packageGroups || []).some(g => +g.cant > 0 && +g.largo > 0 && +g.ancho > 0 && +g.alto > 0);
+        if (!gOk) e.medidas = "Completá cantidad y medidas de al menos un grupo de bultos";
+      }
+    }
     if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -869,17 +957,39 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const seaKg    = form.tipo === "barco" && form.seaMode === "kg";
   const byWeight = form.tipo === "avion" || seaKg;
   const seaM3    = form.tipo === "barco" && !seaKg;
-  const pVol  = byWeight && form.largo && form.ancho && form.alto
-    ? (+form.largo * +form.ancho * +form.alto) / 5000 : 0;
+  // Volumen total = Σ de todos los bultos (grupos o legacy) — misma fuente que el motor
+  const formVol = packTotals(form.bultosIguales ? { ...form, packageGroups: [] } : form).volCm3;
+  const pVol  = byWeight && formVol > 0 ? formVol / 5000 : 0;
   const pFact = Math.max(pVol, +form.peso || 0);
+  const pVolDhl  = formVol > 0 ? formVol / (+settings.dhlDivisor > 0 ? +settings.dhlDivisor : 4000) : 0;
+  const pFactDhl = Math.max(pVolDhl, +form.peso || 0);
+  const dhlPreview = settings.dhlActive && settings.dhlPublic && form.subTipo !== "personal"
+    && (!form.origenSel || form.origenSel === "China");
   const m3p   = +form.m3manual || 0;
   const m3f   = Math.max(+settings.seaMin || 1, m3p);
+
+  // Grupos de bultos (medidas distintas): alta/edición/baja + peso total automático
+  const setGroup = (i, k, v) => {
+    setForm(f => {
+      const gs = [...(f.packageGroups || [])];
+      gs[i] = { ...gs[i], [k]: v };
+      const pesoSum = gs.reduce((sum, g) => sum + (+g.cant > 0 ? +g.cant : 1) * (+g.pesoCaja || 0), 0);
+      return { ...f, packageGroups: gs, ...(pesoSum > 0 ? { peso: String(Math.round(pesoSum * 100) / 100) } : {}) };
+    });
+  };
+  const addGroup = () => setForm(f => ({ ...f, packageGroups: [...(f.packageGroups || []), { cant: "", largo: "", ancho: "", alto: "", pesoCaja: "" }] }));
+  const rmGroup  = (i) => setForm(f => ({ ...f, packageGroups: f.packageGroups.filter((_, j) => j !== i) }));
+  const setIguales = (v) => setForm(f => ({
+    ...f, bultosIguales: v,
+    packageGroups: v ? [] : (f.packageGroups?.length ? f.packageGroups : [{ cant: f.bultos || "1", largo: f.largo, ancho: f.ancho, alto: f.alto, pesoCaja: "" }]),
+  }));
 
   const rowS = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:16 };
 
   return (
     <div style={{ minHeight:"100vh", background:"#f4f7fb" }}>
-      <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh} />
+      <Header onAdmin={onAdminClick} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoading} onRefreshDolar={onRefresh}
+        dhlChip={!!(settings.dhlActive && settings.dhlPublic)} />
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
 
         <Card icon="👤" title="1 · Tus datos" bg="#eef5fb">
@@ -893,9 +1003,15 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               {errors.whatsapp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.whatsapp}</p>}
             </Field>
           </div>
-          <Field label="Email (opcional)">
-            <Inp type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
-          </Field>
+          <div style={rowS}>
+            <Field label="Email (opcional)">
+              <Inp type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+            </Field>
+            <Field label="Código postal de entrega" required hint="Se utiliza para estimar el plazo de entrega DHL.">
+              <Inp placeholder="Ej: 4600 o Y4600ABC" value={form.cp} onChange={e => set("cp", e.target.value)} />
+              {errors.cp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.cp}</p>}
+            </Field>
+          </div>
         </Card>
 
         <Card icon="⚡" title="2 · La forma más rápida: subí tus documentos" bg="#fff2e9">
@@ -1146,12 +1262,48 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         <Card icon="📐" title="5 · Peso y medidas">
           {form.tipo === "avion" && (
             <>
-              <p style={{ fontSize:12, color:"#64748b", marginBottom:12 }}>Medidas del paquete para calcular el <strong>peso volumétrico</strong></p>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
-                <Field label="Largo (cm)"><Inp type="number" placeholder="0" value={form.largo} onChange={e => set("largo", e.target.value)} /></Field>
-                <Field label="Ancho (cm)"><Inp type="number" placeholder="0" value={form.ancho} onChange={e => set("ancho", e.target.value)} /></Field>
-                <Field label="Alto (cm)"><Inp type="number" placeholder="0" value={form.alto}  onChange={e => set("alto",  e.target.value)} /></Field>
+              <p style={{ fontSize:12, color:"#64748b", marginBottom:10 }}>Medidas para calcular el <strong>peso volumétrico</strong> — <strong>las medidas corresponden a cada bulto</strong></p>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}>
+                <span style={{ fontSize:12, fontWeight:700, color:"#334155" }}>¿Todos los bultos tienen las mismas medidas?</span>
+                {[["Sí", true], ["No", false]].map(([lbl, v]) => (
+                  <button key={lbl} onClick={() => setIguales(v)}
+                    style={{ padding:"6px 18px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:700,
+                      border:`2px solid ${form.bultosIguales === v ? "#f26c1e" : "#e2e8f0"}`,
+                      background: form.bultosIguales === v ? "#fff2e9" : "white",
+                      color: form.bultosIguales === v ? "#d9590f" : "#64748b" }}>
+                    {lbl}
+                  </button>
+                ))}
               </div>
+              {form.bultosIguales ? (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+                  <Field label="Largo (cm)"><Inp type="number" placeholder="0" value={form.largo} onChange={e => set("largo", e.target.value)} /></Field>
+                  <Field label="Ancho (cm)"><Inp type="number" placeholder="0" value={form.ancho} onChange={e => set("ancho", e.target.value)} /></Field>
+                  <Field label="Alto (cm)"><Inp type="number" placeholder="0" value={form.alto}  onChange={e => set("alto",  e.target.value)} /></Field>
+                </div>
+              ) : (
+                <div style={{ marginBottom:16 }}>
+                  {(form.packageGroups || []).map((g, i) => (
+                    <div key={i} style={{ background:"#f8fafc", border:"1px solid #e6ebf2", borderRadius:12, padding:12, marginBottom:10 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <p style={{ fontSize:12, fontWeight:800, color:"#0f3d68" }}>Grupo {i + 1}</p>
+                        {i > 0 && <button onClick={() => rmGroup(i)} style={{ background:"none", border:"none", color:"#ef4444", fontSize:12, fontWeight:700, cursor:"pointer" }}>✕ Quitar</button>}
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(95px, 1fr))", gap:8 }}>
+                        <Field label="Cajas iguales"><Inp type="number" placeholder="1" value={g.cant} onChange={e => setGroup(i, "cant", e.target.value)} min={1} /></Field>
+                        <Field label="Largo (cm)"><Inp type="number" placeholder="0" value={g.largo} onChange={e => setGroup(i, "largo", e.target.value)} /></Field>
+                        <Field label="Ancho (cm)"><Inp type="number" placeholder="0" value={g.ancho} onChange={e => setGroup(i, "ancho", e.target.value)} /></Field>
+                        <Field label="Alto (cm)"><Inp type="number" placeholder="0" value={g.alto} onChange={e => setGroup(i, "alto", e.target.value)} /></Field>
+                        <Field label="Peso x caja (kg)"><Inp type="number" placeholder="0.00" value={g.pesoCaja} onChange={e => setGroup(i, "pesoCaja", e.target.value)} /></Field>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={addGroup}
+                    style={{ width:"100%", padding:"10px 0", borderRadius:12, border:"2px dashed #b9cee2", background:"white", color:"#18548a", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                    + Agregar otro tipo de bulto
+                  </button>
+                </div>
+              )}
               {errors.medidas && <p style={{ color:"#ef4444", fontSize:11, marginBottom:12 }}>{errors.medidas}</p>}
             </>
           )}
@@ -1169,25 +1321,28 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             </>
           )}
           <div style={rowS}>
-            <Field label="Peso real total (kg)" required>
+            <Field label="Peso real total (kg)" required hint={!form.bultosIguales && (form.packageGroups || []).some(g => +g.pesoCaja > 0) ? "Se calcula solo: Σ cajas × peso por caja (podés ajustarlo)" : undefined}>
               <div style={{ position:"relative" }}>
                 <Inp type="number" placeholder="0.00" value={form.peso} onChange={e => set("peso", e.target.value)} style={{ paddingRight:36 }} />
                 <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
               </div>
               {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
             </Field>
-            <Field label="Cantidad de bultos" hint="Opcional — mejora la estimación de volumen al comparar modalidades.">
-              <Inp type="number" placeholder="Ej: 1" value={form.bultos} onChange={e => set("bultos", e.target.value)} min={1} />
-            </Field>
+            {form.bultosIguales && (
+              <Field label="Cantidad de bultos" hint="El volumen total multiplica las medidas por esta cantidad.">
+                <Inp type="number" placeholder="Ej: 1" value={form.bultos} onChange={e => set("bultos", e.target.value)} min={1} />
+              </Field>
+            )}
           </div>
 
-          {form.tipo === "avion" && form.largo && form.ancho && form.alto && form.peso && (
+          {form.tipo === "avion" && formVol > 0 && form.peso && (
             <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Avión</p>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, fontSize:12 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Avión{dhlPreview ? " y DHL" : ""}</p>
+              <div style={{ display:"grid", gridTemplateColumns:`repeat(${dhlPreview ? 4 : 3}, 1fr)`, gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Peso volumétrico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
                 <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
-                <div><p style={{ color:"#0f3d68" }}>Facturable</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(pFact)} kg</p></div>
+                <div><p style={{ color:"#0f3d68" }}>Facturable aéreo</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(pFact)} kg</p></div>
+                {dhlPreview && <div><p style={{ color:"#d9590f" }}>Facturable DHL</p><p style={{ fontWeight:700, color:"#d9590f" }}>{fmt(pFactDhl)} kg</p></div>}
               </div>
             </div>
           )}
@@ -1265,29 +1420,37 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
   // (m³ manual o medidas L×A×H, multiplicado por bultos). Envío personal
   // queda aparte (otra lógica, sin comparador).
   const esPersonal = d0.tipo === "avion" && d0.subTipo === "personal";
-  const bultos = +d0.bultos > 0 ? +d0.bultos : 1;
-  const m3Est = +d0.m3manual > 0
-    ? +d0.m3manual
-    : (+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0)
-      ? (+d0.largo * +d0.ancho * +d0.alto * bultos) / 1000000
-      : 0;
+  const volTotal = packTotals(d0).volCm3; // Σ bultos (grupos o legacy)
+  const m3Est = +d0.m3manual > 0 ? +d0.m3manual : volTotal / 1000000;
+
+  // DHL Express: solo China + comercial + ≥ mínimo, y con el flag público activo
+  const dhlElig = esPersonal ? { ok: false, reason: "personal" } : dhlEligibility(d0, s);
+  const dhlVisible = !!(s.dhlPublic && s.dhlActive);
+  const dhlDisabled = dhlVisible && !dhlElig.ok && dhlElig.reason === "peso"; // tarjeta deshabilitada <10 kg
+  const delivery = deliveryEstimate(d0.cp, s);
+
   const baseKey = d0.tipo === "avion" ? "air" : (d0.seaMode === "kg" ? "seaKg" : "seaM3");
   const MODES = esPersonal ? [] : [
     +d0.peso > 0 && { key: "air",   label: "✈️ Aéreo comercial",  pdf: "aéreo",        d: { ...d0, tipo: "avion", subTipo: "comercial" } },
+    dhlVisible && dhlElig.ok && { key: "dhl", label: "⚡ DHL Express", pdf: "DHL",     d: { ...d0, tipo: "dhl" } },
     +d0.peso > 0 && { key: "seaKg", label: "🚢 Marítimo por kilo", pdf: "marítimo kg",  d: { ...d0, tipo: "barco", seaMode: "kg" } },
     m3Est > 0    && { key: "seaM3", label: "🚢 Marítimo por m³",   pdf: "marítimo m³",  d: { ...d0, tipo: "barco", seaMode: "m3", m3manual: m3Est } },
   ].filter(Boolean).map(m => ({ ...m, r: m.key === baseKey ? r0 : calculate(m.d, s) }));
 
+  // La modalidad activa inicial es la que el sistema ya seleccionaba (no se
+  // cambia automáticamente al usuario a DHL)
   const [modeKey, setModeKey] = useState(baseKey);
   const active = MODES.find(m => m.key === modeKey)
     || { key: baseKey, d: d0, r: r0, pdf: esPersonal ? "personal" : (d0.tipo === "avion" ? "aéreo" : (d0.seaMode === "kg" ? "marítimo kg" : "marítimo m³")) };
   const d = active.d, r = active.r;
   const hayComparador = MODES.length > 1;
-  const sinMedidas = modeKey === "air" && !(+d0.largo > 0 && +d0.ancho > 0 && +d0.alto > 0);
+  const sinMedidas = modeKey === "air" && volTotal <= 0;
+  const totalCards = MODES.length + (dhlDisabled ? 1 : 0);
 
-  const tipoLabel = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Aéreo · Envío Personal (Franquicia)" : "Aéreo Comercial")
-    : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
+  const tipoLabel = r.isDhl ? "DHL Express"
+    : d.tipo === "avion"
+      ? (d.subTipo === "personal" ? "Aéreo · Envío Personal (Franquicia)" : "Aéreo Comercial")
+      : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1305,7 +1468,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 
   const copyResumen = async () => {
     try {
-      await navigator.clipboard.writeText(buildShortSummary(d, r, dolar));
+      await navigator.clipboard.writeText(buildShortSummary(d, r, dolar, s));
       setCopied(true); setTimeout(() => setCopied(false), 2000);
     } catch { alert("No se pudo copiar — seleccioná y copiá el texto manualmente."); }
   };
@@ -1319,19 +1482,31 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
       {/* paddingBottom extra: que el botón flotante de WhatsApp no tape los botones de acción en mobile */}
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px 96px" }}>
 
-        {/* Selector de modalidad: las 3 opciones con los mismos datos (como la interna) */}
-        {hayComparador && (
-          <div style={{ display:"grid", gridTemplateColumns:`repeat(${MODES.length}, 1fr)`, gap:8, marginBottom:14 }}>
-            {MODES.map(m => { const on = modeKey === m.key; return (
+        {/* Selector de modalidad: todas las compatibles con los mismos datos.
+            Con 4 tarjetas: 2×2 en escritorio, una por fila en móvil. */}
+        {(hayComparador || dhlDisabled) && (
+          <div style={{ display:"grid", gridTemplateColumns: totalCards >= 4 ? "repeat(auto-fit, minmax(240px, 1fr))" : `repeat(${totalCards}, 1fr)`, gap:8, marginBottom:14 }}>
+            {MODES.map(m => { const on = modeKey === m.key; const esDhl = m.key === "dhl"; return (
               <button key={m.key} onClick={() => setModeKey(m.key)}
                 style={{ padding:"12px 6px", borderRadius:14, cursor:"pointer",
                   border:`2px solid ${on ? "#f26c1e" : "#e2e8f0"}`,
                   background: on ? "#fff2e9" : "white",
                   boxShadow: on ? "0 2px 12px rgba(242,108,30,0.15)" : "none" }}>
                 <p style={{ fontWeight:800, fontSize:12, color: on ? "#d9590f" : "#64748b" }}>{m.label}</p>
+                {esDhl && (
+                  <p style={{ fontSize:10.5, color: on ? "#b45309" : "#94a3b8", fontWeight:700 }}>
+                    Más rápido · {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · Zona de entrega extendida" : ""}
+                  </p>
+                )}
                 <p style={{ fontWeight:900, fontSize:15, color: on ? "#15233b" : "#94a3b8" }}>{USD(m.r.totalGen)}</p>
               </button>
             ); })}
+            {dhlDisabled && (
+              <div style={{ padding:"12px 6px", borderRadius:14, border:"2px dashed #e2e8f0", background:"#f8fafc", textAlign:"center" }}>
+                <p style={{ fontWeight:800, fontSize:12, color:"#94a3b8" }}>⚡ DHL Express</p>
+                <p style={{ fontSize:10.5, color:"#94a3b8", fontWeight:600 }}>Disponible desde {dhlElig.min ?? 10} kg de peso facturable</p>
+              </div>
+            )}
           </div>
         )}
         {sinMedidas && baseKey !== "air" && (
@@ -1362,14 +1537,19 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
               <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.fob)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>Envío total</p>
-              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.totalLog)}</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.isDhl ? "Flete internacional" : "Envío total"}</p>
+              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.isDhl ? r.flete : r.totalLog)}</p>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.isAir ? "Kg facturable" : (r.seaKg ? "Peso (kg)" : "M³ facturable")}</p>
+              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.byWeight ? (r.seaKg ? "Peso (kg)" : "Kg facturable") : "M³ facturable"}</p>
               <p style={{ fontWeight:700, fontSize:14 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
             </div>
           </div>
+          {r.isDhl && (
+            <p style={{ textAlign:"center", fontSize:12, color:"#ffb27a", fontWeight:700, marginTop:10 }}>
+              ⚡ Entrega estimada: {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · Zona de entrega extendida" : ""}
+            </p>
+          )}
         </div>
 
         {r.isPersonal && (
@@ -1398,6 +1578,37 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           </div>
         )}
 
+        {r.isDhl ? (<>
+          {/* ── Desglose DHL Express (secciones propias — sin filas en cero) ── */}
+          <Card icon="⚡" title="Flete internacional · DHL Express">
+            <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Peso real total</span><span style={{ fontWeight:600 }}>{fmt(r.peso)} kg</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Peso volumétrico DHL (volumen ÷ {fmt(r.dhlDivisor, 0)})</span><span style={{ fontWeight:600 }}>{fmt(r.pVol)} kg</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13, background:"#fff2e9" }}>
+              <span style={{ fontWeight:700, color:"#d9590f" }}>Peso facturable DHL (el mayor)</span><span style={{ fontWeight:700, color:"#d9590f" }}>{fmt(r.pFact)} kg</span>
+            </div>
+            <Row label={`Flete internacional (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} hi />
+            <Row label={`Seguro (${s.insurance}%)`} usd={r.seguro} dolar={dolar} />
+          </Card>
+
+          <Card icon="🏛️" title="Base aduanera y tributos">
+            <Row label={`Flete estimado para base aduanera (USD ${r.customsPerKg}/kg)`} usd={r.fleteBase} dolar={dolar}
+              note="Se utiliza únicamente para estimar tributos y no es un cargo adicional." />
+            <Row label="CIF (FOB + flete estimado + seguro)" usd={r.cif} dolar={dolar} hi />
+            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · IA" : ""))})`} usd={r.duty} dolar={dolar} />
+            <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
+            <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
+            <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
+          </Card>
+
+          <Card icon="🚚" title="Servicios logísticos">
+            <Row label="Handling DHL (único cargo por operación)" usd={r.handling} dolar={dolar} hi />
+          </Card>
+        </>) : (<>
         <Card icon="🌐" title="Flete internacional">
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
           {r.byWeight ? (<>
@@ -1467,6 +1678,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           <Row label="Envío nacional" usd={r.domestic} dolar={dolar} />
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
+        </>)}
 
         {/* Resumen final — presupuesto FVR con desglose explicado */}
         <div style={{ background:"white", borderRadius:20, overflow:"hidden", border:"1px solid #e6ebf2", boxShadow:"0 8px 30px -12px rgba(22,36,58,0.25)", marginBottom:20 }}>
@@ -1487,13 +1699,18 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
 
           {/* Desglose con explicación de cada concepto */}
           <div style={{ padding:"8px 20px" }}>
-            {[
+            {(r.isDhl ? [
+              ["📦", "Valor de tu mercadería", "FOB declarado según factura del proveedor", r.fob],
+              ["⚡", "Transporte internacional", `Flete DHL Express y seguro · entrega ${delivery.min} a ${delivery.max} días hábiles${delivery.remote ? " (zona extendida)" : ""}`, r.flete + r.seguro],
+              ["🏛️", "Impuestos y tributos", "Derechos de importación, tasa estadística e IVA", r.duty + r.stat + r.iva],
+              ["📦", "Handling DHL", "Único cargo logístico de la operación", r.handling],
+            ] : [
               ["📦", "Valor de tu mercadería", "FOB declarado según factura del proveedor", r.fob],
               [r.isAir ? "✈️" : "🚢", "Transporte internacional", "Flete y seguro desde origen hasta Argentina", r.flete + r.seguro],
               ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA e impuestos internos" : (r.isPersonal ? "Derechos de importación e IVA (régimen personal)" : "Derechos de importación, tasa estadística e IVA"), r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
               ["🚚", "Logística puerta a puerta", "Retiro en origen, handling y envío nacional", r.pickup + r.handling + r.domestic],
               ["🤝", "Gestión FVR", "Seguimiento y coordinación integral de tu importación", r.fees],
-            ].map(([icon, label, desc, val]) => (
+            ]).map(([icon, label, desc, val]) => (
               <div key={label} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 0", borderBottom:"1px solid #eef2f7" }}>
                 <div style={{ width:36, height:36, borderRadius:10, background:"#eef5fb", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>{icon}</div>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -1853,7 +2070,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 <option value="">Todos los estados</option>{Object.entries(STATUS_MAP).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
               </select>
               <select value={filter.tipo} onChange={e=>setFilter(f=>({...f,tipo:e.target.value}))} style={{ ...inputStyle, width:"auto" }}>
-                <option value="">Todos los tipos</option><option value="avion">✈️ Avión</option><option value="barco">🚢 Barco</option>
+                <option value="">Todos los tipos</option><option value="avion">✈️ Avión</option><option value="dhl">⚡ DHL Express</option><option value="barco">🚢 Barco</option>
               </select>
               <button onClick={exportCSV} style={{ padding:"10px 16px", borderRadius:12, border:"none", background:"#22c55e", color:"white", fontWeight:700, cursor:"pointer", fontSize:13 }}>📥 Exportar CSV</button>
             </div>
@@ -1880,6 +2097,39 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               </div>
               <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa es fija por kg (no varía con el peso). Cualquier otro país de origen usa la tarifa de China.</p>
             </Card>
+
+            <Card icon="⚡" title="DHL Express — China a Argentina">
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:16, marginBottom:8 }}>
+                <SettingToggle s={s} setS={setS} label="DHL activo" k="dhlActive"/>
+                <SettingToggle s={s} setS={setS} label="Mostrar DHL en calculadora pública" k="dhlPublic"/>
+              </div>
+              <p style={{ fontSize:11, color:"#64748b", marginBottom:12 }}>País permitido: <strong>China</strong> · solo envíos comerciales. Con "pública" apagado, DHL solo aparece en la calculadora interna.</p>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
+                <SettingField s={s} setS={setS} label="Peso mínimo (kg)" k="dhlMinKg" min={0} step="0.1"/>
+                <SettingField s={s} setS={setS} label="Divisor volumétrico" k="dhlDivisor" min={1} step="1"/>
+                <SettingField s={s} setS={setS} label="Tarifa desde 10 y < 30 kg (USD/kg)" k="dhlRateLow" min={0}/>
+                <SettingField s={s} setS={setS} label="Tarifa desde 30 kg (USD/kg)" k="dhlRateHigh" min={0}/>
+                <SettingField s={s} setS={setS} label="Flete estimado base aduanera (USD/kg)" k="dhlCustomsPerKg" min={0}/>
+                <SettingField s={s} setS={setS} label="Handling DHL (USD, único cargo)" k="dhlHandling" min={0}/>
+                <SettingField s={s} setS={setS} label="Demora estándar mín. (días háb.)" k="dhlDeliveryMin" min={1} step="1"/>
+                <SettingField s={s} setS={setS} label="Demora estándar máx. (días háb.)" k="dhlDeliveryMax" min={1} step="1"/>
+                <SettingField s={s} setS={setS} label="Demora zona remota mín." k="dhlRemoteMin" min={1} step="1"/>
+                <SettingField s={s} setS={setS} label="Demora zona remota máx." k="dhlRemoteMax" min={1} step="1"/>
+              </div>
+              {(() => {
+                const warn = [];
+                if (+s.dhlDivisor <= 0) warn.push("El divisor volumétrico no puede ser cero.");
+                if (+s.dhlMinKg < 0) warn.push("El peso mínimo no puede ser negativo.");
+                if (+s.dhlDeliveryMin > +s.dhlDeliveryMax) warn.push("La demora estándar mínima supera la máxima.");
+                if (+s.dhlRemoteMin > +s.dhlRemoteMax) warn.push("La demora remota mínima supera la máxima.");
+                return warn.length ? <p style={{ fontSize:11, color:"#ef4444", marginTop:8, fontWeight:700 }}>⚠ {warn.join(" ")}</p> : null;
+              })()}
+              <p style={{ fontSize:11, color:"#64748b", marginTop:10 }}>
+                El seguro DHL reutiliza el porcentaje global de seguro. El "flete estimado para base aduanera" solo forma tributos — no se cobra al cliente.
+                <br/>Zonas remotas: <strong>lista {`${REMOTE_META.count}`} códigos</strong>{REMOTE_META.updated ? ` · actualizada el ${REMOTE_META.updated}` : " · pendiente de importar la lista oficial"} — se actualiza con <code>scripts/import-dhl-zones.mjs</code> (ver docs).
+              </p>
+            </Card>
+
             <Card icon="🚢" title="Flete marítimo">
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                 <SettingField s={s} setS={setS} label="Tarifa por m³ (USD / m³)" k="seaRate"/><SettingField s={s} setS={setS} label="Mínimo facturable (m³)" k="seaMin"/>
@@ -2014,11 +2264,16 @@ const OV_FIELDS = [
   ["handlingMaxKgSea", "Umbral handling marítimo (se cobra si peso < kg)"],
   ["domestic", "Envío nac. avión (USD)"],
   ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
+  // ── DHL Express (solo esta cotización) ──
+  ["dhlRateLow", "DHL tarifa 10–29,999 kg (USD/kg)"], ["dhlRateHigh", "DHL tarifa desde 30 kg (USD/kg)"],
+  ["dhlDivisor", "DHL divisor volumétrico"], ["dhlCustomsPerKg", "DHL flete base aduanera (USD/kg)"],
+  ["dhlHandling", "DHL handling (USD)"], ["dhlMinKg", "DHL peso mínimo (kg)"],
 ];
 
 const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = false }) => {
   const blank = { producto: "", nombre: "", cantidad: "", fob: "", peso: "", largo: "", ancho: "", alto: "", m3manual: "", bultos: "",
-    origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "kg", manualDuty: "", aiDutyRate: null };
+    origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "kg", manualDuty: "", aiDutyRate: null,
+    cp: "", dhlCustomsOverride: "" };
   const [d, setD] = useState(blank);
   const [ov, setOv] = useState({});           // overrides temporales de settings (solo esta cotización)
   const [dolarOv, setDolarOv] = useState(""); // tipo de cambio manual de esta cotización
@@ -2049,7 +2304,19 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
     setPdfLoading(false);
   };
 
-  const detalleTecnico = () => [
+  const detalleTecnico = () => r.isDhl ? [
+    `COTIZACIÓN INTERNA FVR — DHL EXPRESS — ${d.producto || "sin producto"}`,
+    `Origen: China · Comercial${d.cp ? ` · CP ${d.cp}` : ""}`,
+    `FOB ${USD(r.fob)} · Peso real ${fmt(r.peso)} kg · Vol. DHL ${fmt(r.pVol)} kg (÷${fmt(r.dhlDivisor, 0)}) · FACTURABLE ${fmt(r.pFact)} kg`,
+    `Flete cobrado: ${fmt(r.pFact)} kg × USD ${r.airRate}/kg = ${USD(r.flete)}`,
+    `Base aduanera: ${r.customsOverride ? `OVERRIDE ${USD(r.fleteBase)}` : `${fmt(r.pFact)} kg × USD ${r.customsPerKg}/kg = ${USD(r.fleteBase)}`} (solo tributos — NO se cobra)`,
+    `Seguro ${s.insurance}% s/(FOB+base) = ${USD(r.seguro)} · CIF ${USD(r.cif)}`,
+    `Derecho ${r.effectiveDutyPct}% ${USD(r.duty)} · Tasa ${s.stat}% ${USD(r.stat)} · Base IVA ${USD(r.ivaBase)} · IVA ${s.vat}% ${USD(r.iva)}`,
+    `Handling DHL ${USD(r.handling)} (único cargo — sin honorarios/pickup/nacional)`,
+    `TOTAL SERVICIO ${USD(r.totalLog)} · TOTAL GENERAL ${USD(r.totalGen)}${rate ? ` · ARS ${fmt(r.totalGen * rate, 0)}` : ""}`,
+    r.unitario ? `Unitario (${r.cantidad} u.): ${USD(r.unitario)}` : null,
+    `Dólar: $${fmt(rate || 0)}${dolarOv ? " (manual de esta cotización)" : ""}`,
+  ].filter(Boolean).join("\n") : [
     `COTIZACIÓN INTERNA FVR — ${d.producto || "sin producto"}`,
     `Modalidad: ${d.tipo === "avion" ? "Aéreo" : d.seaMode === "kg" ? "Marítimo kg" : "Marítimo m³"} · Origen: ${d.origenSel}`,
     `FOB ${USD(r.fob)} · ${r.byWeight ? `Peso fact. ${fmt(r.pFact)} kg × ${r.airRate}/kg` : `Vol ${fmt(r.m3Fact, 2)} m³ × ${s.seaRate}/m³`}`,
@@ -2099,17 +2366,27 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             <Inp type="number" placeholder="Ancho cm" value={d.ancho} onChange={e => set("ancho", e.target.value)} style={inputMini} />
             <Inp type="number" placeholder="Alto cm" value={d.alto} onChange={e => set("alto", e.target.value)} style={inputMini} />
             <Inp type="number" placeholder="m³ (directo)" value={d.m3manual} onChange={e => set("m3manual", e.target.value)} style={inputMini} />
-            <select value={d.origenSel} onChange={e => set("origenSel", e.target.value)} style={{ ...inputMini, cursor: "pointer" }}>
+            <select value={d.origenSel} onChange={e => { const v = e.target.value; setD(p => ({ ...p, origenSel: v, ...(v !== "China" && p.tipo === "dhl" ? { tipo: "avion" } : {}) })); }} style={{ ...inputMini, cursor: "pointer" }}>
               <option>China</option><option>Estados Unidos (USA)</option><option>España</option><option value="otro">Otro</option>
             </select>
             <Inp type="number" placeholder="Arancel % (manual)" value={d.manualDuty} onChange={e => set("manualDuty", e.target.value)} style={inputMini} />
+            <Inp placeholder="CP entrega (opcional)" value={d.cp} onChange={e => set("cp", e.target.value)} style={inputMini} />
+            {d.tipo === "dhl" && (
+              <Inp type="number" placeholder="Base aduanera TOTAL (override)" title="Vacío = automático: peso facturable × USD/kg" value={d.dhlCustomsOverride} onChange={e => set("dhlCustomsOverride", e.target.value)} style={inputMini} />
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            {[["avion", "✈️ Aéreo"], ["barco-kg", "🚢 Kg"], ["barco-m3", "🚢 m³"]].map(([v, l]) => {
-              const activo = v === "avion" ? d.tipo === "avion" : d.tipo === "barco" && (v === "barco-kg" ? d.seaMode === "kg" : d.seaMode === "m3");
+            {[
+              ...(s.dhlActive && d.origenSel === "China" ? [["dhl", "⚡ DHL"]] : []),
+              ["avion", "✈️ Aéreo"], ["barco-kg", "🚢 Kg"], ["barco-m3", "🚢 m³"],
+            ].map(([v, l]) => {
+              const activo = v === "dhl" ? d.tipo === "dhl" : v === "avion" ? d.tipo === "avion" : d.tipo === "barco" && (v === "barco-kg" ? d.seaMode === "kg" : d.seaMode === "m3");
               return (
-                <button key={v} onClick={() => v === "avion" ? set("tipo", "avion") : setD(p => ({ ...p, tipo: "barco", seaMode: v === "barco-kg" ? "kg" : "m3" }))}
-                  style={{ flex: 1, minWidth: 80, padding: "10px 0", borderRadius: 10, border: `2px solid ${activo ? "#18548a" : "#e2e8f0"}`, background: activo ? "#eef5fb" : "white", color: activo ? "#0f3d68" : "#64748b", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                <button key={v} onClick={() =>
+                    v === "dhl" ? setD(p => ({ ...p, tipo: "dhl", subTipo: "comercial" })) // DHL siempre comercial
+                    : v === "avion" ? set("tipo", "avion")
+                    : setD(p => ({ ...p, tipo: "barco", seaMode: v === "barco-kg" ? "kg" : "m3" }))}
+                  style={{ flex: 1, minWidth: 74, padding: "10px 0", borderRadius: 10, border: `2px solid ${activo ? (v === "dhl" ? "#f26c1e" : "#18548a") : "#e2e8f0"}`, background: activo ? (v === "dhl" ? "#fff2e9" : "#eef5fb") : "white", color: activo ? (v === "dhl" ? "#d9590f" : "#0f3d68") : "#64748b", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                   {l}
                 </button>
               );
@@ -2155,12 +2432,28 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             <p style={{ fontSize: 32, fontWeight: 900 }}>{USD(r.totalGen)}</p>
             {rate && <p style={{ fontSize: 14, color: "#b9cee2" }}>ARS {fmt(r.totalGen * rate, 0)} · dólar ${fmt(rate)}</p>}
             {r.unitario && <p style={{ fontSize: 13, color: "#b9cee2", marginTop: 4 }}>≈ {USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#dbe8f6" }}>
-              <span>Flete: {USD(r.flete)}</span><span>CIF: {USD(r.cif)}</span>
-              <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
-              <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
-              <span>Handling: {USD(r.handling)}{r.hasHandling && r.handling === 0 ? ` (no aplica: peso ≥ ${d.tipo === "avion" ? (s.handlingMaxKg ?? 3) : (s.handlingMaxKgSea ?? 3)} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
-            </div>
+            {r.isDhl ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#dbe8f6" }}>
+                <span>Flete DHL ({r.airRate}/kg × {fmt(r.pFact)} kg): {USD(r.flete)}</span><span>Seguro: {USD(r.seguro)}</span>
+                <span>Base aduanera{r.customsOverride ? " (override)" : ` (${r.customsPerKg}/kg)`}: {USD(r.fleteBase)}</span><span>CIF: {USD(r.cif)}</span>
+                <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
+                <span>Tasa est.: {USD(r.stat)}</span><span>Handling DHL: {USD(r.handling)}</span>
+                <span>Vol. DHL (÷{fmt(r.dhlDivisor, 0)}): {fmt(r.pVol)} kg</span><span>Servicio total: {USD(r.totalLog)}</span>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#dbe8f6" }}>
+                <span>Flete: {USD(r.flete)}</span><span>CIF: {USD(r.cif)}</span>
+                <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
+                <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
+                <span>Handling: {USD(r.handling)}{r.hasHandling && r.handling === 0 ? ` (no aplica: peso ≥ ${d.tipo === "avion" ? (s.handlingMaxKg ?? 3) : (s.handlingMaxKgSea ?? 3)} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
+              </div>
+            )}
+            {r.isDhl && (() => { const del = deliveryEstimate(d.cp, s); return (
+              <p style={{ fontSize: 12, color: "#ffb27a", fontWeight: 700, marginTop: 10 }}>
+                ⚡ Entrega estimada: {del.min} a {del.max} días hábiles{del.remote ? " · Zona de entrega extendida" : ""}
+                {r.pFact < (+s.dhlMinKg || 10) ? ` · ⚠ Bajo el mínimo público de ${+s.dhlMinKg || 10} kg` : ""}
+              </p>
+            ); })()}
           </div>
 
           {/* Comparador */}
@@ -2177,7 +2470,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <button onClick={() => copy(buildShortSummary(dd, r, rate), "cliente")}
+            <button onClick={() => copy(buildShortSummary(dd, r, rate, s), "cliente")}
               style={{ padding: "13px 0", borderRadius: 12, border: "none", background: copied === "cliente" ? "#22c55e" : "linear-gradient(135deg,#f26c1e 0%,#f2741b 55%,#fdb813 130%)", color: "white", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
               {copied === "cliente" ? "✓ Copiado" : "📋 Copiar resumen cliente"}
             </button>
@@ -2187,7 +2480,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             </button>
             <button onClick={doPDF} disabled={pdfLoading}
               style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0f3d68,#18548a)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
-              {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
+              {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "dhl" ? "DHL" : d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
             </button>
           </div>
           <p style={{ fontSize: 11, color: "#64748b", marginTop: 10, textAlign: "center" }}>Nada se guarda automáticamente: esta pantalla es solo para cotizar rápido.</p>

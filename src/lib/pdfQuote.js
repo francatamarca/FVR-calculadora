@@ -115,9 +115,9 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   };
 
   /* ── 1 · Datos en DOS columnas (compacto y prolijo) ── */
+  // Cliente y producto YA están en el encabezado grande — acá no se repiten
   const cw = (W - 2 * M) / 4;
   const datos = [
-    ["Cliente", d.nombre || "—", "Producto", (d.producto || "—").slice(0, 38)],
     ["WhatsApp", d.whatsapp || "—", "País de origen", d.paisOrigen || (r.isDhl ? "China" : "—")],
     ["Email", (d.email || "—").slice(0, 32), "HS Code", d.hsCode || "—"],
     ["Código postal", d.cp || "—", "Tipo de envío", tipo],
@@ -177,7 +177,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       ["CIF / Valor en aduana", USD(r.cif)],
     );
   }
-  section("TRANSPORTE INTERNACIONAL", flete);
+  section("FLETE INTERNACIONAL", flete);
 
   /* ── DHL: base aduanera con nota ── */
   if (r.isDhl) {

@@ -113,11 +113,19 @@ describe("Código postal — normalización y estado de zona", () => {
   it("conserva el valor original para mostrar", () => {
     expect(normalizeCP("Y4600ABC").original).toBe("Y4600ABC");
   });
-  it("CP sin parte numérica → unknown", () => expect(remoteStatus("ABCD")).toBe("unknown"));
-  it("lista oficial vacía → unknown y plazo estándar 5-7 (sin inventar códigos)", () => {
-    expect(remoteStatus("4600")).toBe("unknown");
-    const e = deliveryEstimate("4600", S);
+  it("CP sin parte numérica → unknown y plazo estándar 5-7", () => {
+    expect(remoteStatus("ABCD")).toBe("unknown");
+    const e = deliveryEstimate("ABCD", S);
     expect(e.min).toBe(5); expect(e.max).toBe(7); expect(e.remote).toBe(false);
+  });
+  it("lista oficial DHL (vigencia 04/01/2026): remotos y no remotos reales", () => {
+    expect(remoteStatus("1633")).toBe("remote");     // primer rango del PDF (1633-1634)
+    expect(remoteStatus("Y4600ABC")).toBe("remote"); // Jujuy — figura en la lista
+    expect(remoteStatus("9410")).toBe("remote");     // Ushuaia
+    expect(remoteStatus("1000")).toBe("not_remote"); // CABA no figura
+    expect(remoteStatus("1414")).toBe("not_remote");
+    const e = deliveryEstimate("4600", S);
+    expect(e.remote).toBe(true); expect(e.min).toBe(9); expect(e.max).toBe(11);
   });
 });
 

@@ -1083,10 +1083,10 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                 <span style={{ fontSize:12, fontWeight:700, color:"#334155" }}>¿Todos los bultos tienen las mismas medidas?</span>
                 {[["Sí", true], ["No", false]].map(([lbl, v]) => (
                   <button key={lbl} onClick={() => setIguales(v)}
-                    style={{ padding:"6px 18px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:700,
-                      border:`2px solid ${form.bultosIguales === v ? "#f26c1e" : "#e2e8f0"}`,
-                      background: form.bultosIguales === v ? "#fff2e9" : "white",
-                      color: form.bultosIguales === v ? "#d9590f" : "#64748b" }}>
+                    style={{ padding:"6px 18px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:800,
+                      border:`2px solid ${form.bultosIguales === v ? "#18548a" : "#e2e8f0"}`,
+                      background: form.bultosIguales === v ? "#eef5fb" : "white",
+                      color: form.bultosIguales === v ? "#0f3d68" : "#64748b" }}>
                     {lbl}
                   </button>
                 ))}
@@ -1315,23 +1315,24 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           <div style={{ display:"grid", gridTemplateColumns: totalCards >= 4 ? "repeat(auto-fit, minmax(240px, 1fr))" : `repeat(${totalCards}, 1fr)`, gap:8, marginBottom:14 }}>
             {MODES.map(m => { const on = modeKey === m.key; const esDhl = m.key === "dhl"; return (
               <button key={m.key} onClick={() => setModeKey(m.key)}
-                style={{ padding:"12px 6px", borderRadius:14, cursor:"pointer",
-                  border:`2px solid ${on ? "#f26c1e" : "#e2e8f0"}`,
-                  background: on ? "#fff2e9" : "white",
-                  boxShadow: on ? "0 2px 12px rgba(242,108,30,0.15)" : "none" }}>
-                <p style={{ fontWeight:800, fontSize:12, color: on ? "#d9590f" : "#64748b" }}>{m.label}</p>
+                style={{ padding:"14px 10px 12px", borderRadius:14, cursor:"pointer", position:"relative", textAlign:"center",
+                  border: on ? "1px solid #0b2f52" : "1px solid #e6ebf2",
+                  background: on ? "linear-gradient(135deg,#0b2f52,#18548a)" : "white",
+                  boxShadow: on ? "0 10px 26px -10px rgba(11,47,82,0.5)" : "0 1px 4px rgba(22,36,58,0.06)" }}>
+                {on && <span style={{ position:"absolute", top:-9, left:"50%", transform:"translateX(-50%)", background:"linear-gradient(135deg,#f26c1e,#fdb813)", color:"white", fontSize:9, fontWeight:800, borderRadius:99, padding:"2.5px 10px", letterSpacing:1.5, whiteSpace:"nowrap" }}>TU SELECCIÓN</span>}
+                <p style={{ fontWeight:800, fontSize:12, color: on ? "#b9cee2" : "#475569", letterSpacing:.3 }}>{m.label}</p>
                 {esDhl && (
-                  <p style={{ fontSize:10.5, color: on ? "#b45309" : "#94a3b8", fontWeight:700 }}>
-                    Más rápido · {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · Zona de entrega extendida" : ""}
+                  <p style={{ fontSize:10.5, color: on ? "#ffb27a" : "#94a3b8", fontWeight:700, marginTop:1 }}>
+                    Más rápido · {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · zona extendida" : ""}
                   </p>
                 )}
-                <p style={{ fontWeight:900, fontSize:15, color: on ? "#15233b" : "#94a3b8" }}>{USD(m.r.totalGen)}</p>
+                <p style={{ fontWeight:900, fontSize:16.5, color: on ? "white" : "#15233b", marginTop:3 }}>{USD(m.r.totalGen)}</p>
               </button>
             ); })}
             {dhlDisabled && (
-              <div style={{ padding:"12px 6px", borderRadius:14, border:"2px dashed #e2e8f0", background:"#f8fafc", textAlign:"center" }}>
+              <div style={{ padding:"14px 10px 12px", borderRadius:14, border:"1px dashed #cbd5e1", background:"#f8fafc", textAlign:"center" }}>
                 <p style={{ fontWeight:800, fontSize:12, color:"#94a3b8" }}>⚡ DHL Express</p>
-                <p style={{ fontSize:10.5, color:"#94a3b8", fontWeight:600 }}>Disponible desde {dhlElig.min ?? 10} kg de peso facturable</p>
+                <p style={{ fontSize:10.5, color:"#94a3b8", fontWeight:600, marginTop:3 }}>Disponible desde {dhlElig.min ?? 10} kg de peso facturable</p>
               </div>
             )}
           </div>
@@ -1342,41 +1343,44 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           </p>
         )}
 
-        {/* Card principal — Tu cotización de importación */}
-        <div style={{ background:"linear-gradient(135deg,#0b2f52 0%,#18548a 100%)", borderRadius:20, padding:20, marginBottom:20, color:"white", boxShadow:"0 4px 24px rgba(11,47,82,0.35)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:10 }}>
-            <div>
-              <p style={{ fontSize:11, color:"#b9cee2", textTransform:"uppercase", letterSpacing:2, marginBottom:4 }}>Tu cotización de importación</p>
-              <h2 style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>{d.nombre}</h2>
-              <p style={{ fontSize:13, color:"#b9cee2" }}>{d.producto} · <strong style={{ color:"#ffb27a" }}>{tipoLabel}</strong></p>
-              {dolar && <p style={{ fontSize:11, color:"#b9cee2", marginTop:4 }}>Dólar oficial usado: ${fmt(dolar)}</p>}
+        {/* Card principal — Tu cotización de importación (navy con filete de marca) */}
+        <div style={{ background:"linear-gradient(135deg,#0b2f52 0%,#18548a 100%)", borderRadius:20, marginBottom:20, color:"white", boxShadow:"0 10px 30px -10px rgba(11,47,82,0.5)", overflow:"hidden" }}>
+          <div style={{ height:4, background:"linear-gradient(90deg,#f26c1e,#f2741b 55%,#fdb813)" }} />
+          <div style={{ padding:"18px 20px 20px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:12 }}>
+              <div style={{ minWidth:0 }}>
+                <p style={{ fontSize:10.5, color:"#8fb3d9", textTransform:"uppercase", letterSpacing:2.5, marginBottom:5, fontWeight:700 }}>Tu cotización de importación</p>
+                <h2 style={{ fontSize:22, fontWeight:900, marginBottom:3, letterSpacing:-0.3 }}>{d.nombre}</h2>
+                <p style={{ fontSize:13, color:"#b9cee2" }}>{d.producto} · <strong style={{ color:"#ffb27a" }}>{tipoLabel}</strong></p>
+                {r.isDhl && (
+                  <p style={{ fontSize:12, color:"#ffb27a", fontWeight:700, marginTop:6 }}>
+                    ⚡ Entrega estimada: {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · zona extendida" : ""}
+                  </p>
+                )}
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                <p style={{ fontSize:10.5, color:"#8fb3d9", textTransform:"uppercase", letterSpacing:2, fontWeight:700 }}>Total general</p>
+                <p style={{ fontSize:30, fontWeight:900, lineHeight:1.15, letterSpacing:-0.5 }}>{USD(r.totalGen)}</p>
+                {dolar && <p style={{ fontSize:14.5, color:"#ffb27a", fontWeight:800 }}>{ARS(r.totalGen, dolar)}</p>}
+                {r.unitario && <p style={{ fontSize:11.5, color:"#b9cee2", marginTop:3 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+              </div>
             </div>
-            <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>Total general</p>
-              <p style={{ fontSize:28, fontWeight:900 }}>{USD(r.totalGen)}</p>
-              {dolar && <p style={{ fontSize:14, color:"#dbe8f6", fontWeight:700 }}>{ARS(r.totalGen, dolar)}</p>}
-              {r.unitario && <p style={{ fontSize:12, color:"#b9cee2", marginTop:2 }}>{USD(r.unitario)} por unidad ({r.cantidad} u.)</p>}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:14, padding:"12px 8px" }}>
+              <div style={{ textAlign:"center" }}>
+                <p style={{ fontSize:10, color:"#8fb3d9", textTransform:"uppercase", letterSpacing:1.2, fontWeight:700, marginBottom:3 }}>FOB / Valor prod.</p>
+                <p style={{ fontWeight:800, fontSize:14.5 }}>{USD(r.fob)}</p>
+              </div>
+              <div style={{ textAlign:"center", borderLeft:"1px solid rgba(255,255,255,0.12)", borderRight:"1px solid rgba(255,255,255,0.12)" }}>
+                <p style={{ fontSize:10, color:"#8fb3d9", textTransform:"uppercase", letterSpacing:1.2, fontWeight:700, marginBottom:3 }}>{r.isDhl ? "Flete internacional" : "Envío total"}</p>
+                <p style={{ fontWeight:800, fontSize:14.5 }}>{USD(r.isDhl ? r.flete : r.totalLog)}</p>
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <p style={{ fontSize:10, color:"#8fb3d9", textTransform:"uppercase", letterSpacing:1.2, fontWeight:700, marginBottom:3 }}>{r.byWeight ? (r.seaKg ? "Peso (kg)" : "Kg facturable") : "M³ facturable"}</p>
+                <p style={{ fontWeight:800, fontSize:14.5 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
+              </div>
             </div>
+            {dolar && <p style={{ fontSize:10.5, color:"#8fb3d9", marginTop:10, textAlign:"right" }}>Dólar oficial usado: ${fmt(dolar)}</p>}
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, borderTop:"1px solid rgba(255,255,255,0.15)", paddingTop:14 }}>
-            <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>FOB / Valor prod.</p>
-              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.fob)}</p>
-            </div>
-            <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.isDhl ? "Flete internacional" : "Envío total"}</p>
-              <p style={{ fontWeight:700, fontSize:14 }}>{USD(r.isDhl ? r.flete : r.totalLog)}</p>
-            </div>
-            <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:11, color:"#b9cee2" }}>{r.byWeight ? (r.seaKg ? "Peso (kg)" : "Kg facturable") : "M³ facturable"}</p>
-              <p style={{ fontWeight:700, fontSize:14 }}>{r.byWeight ? `${fmt(r.pFact)} kg` : `${fmt(r.m3Fact, 3)} m³`}</p>
-            </div>
-          </div>
-          {r.isDhl && (
-            <p style={{ textAlign:"center", fontSize:12, color:"#ffb27a", fontWeight:700, marginTop:10 }}>
-              ⚡ Entrega estimada: {delivery.min} a {delivery.max} días hábiles{delivery.remote ? " · Zona de entrega extendida" : ""}
-            </p>
-          )}
         </div>
 
         {r.isPersonal && (
@@ -1512,7 +1516,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
           {/* Banda de marca */}
           <div style={{ background:"linear-gradient(135deg,#0b2f52,#0f3d68 60%,#18548a)", padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:34, height:34, borderRadius:9, background:"linear-gradient(135deg,#f26c1e,#fdb813)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"white", fontSize:11, flexShrink:0 }}>FVR</div>
+              <img src="/logo-fvr.jpg" alt="FVR" style={{ width:36, height:36, borderRadius:9, background:"white", padding:3, objectFit:"contain", flexShrink:0 }} />
               <div>
                 <p style={{ fontSize:14, fontWeight:800, color:"white" }}>Resumen de tu cotización</p>
                 <p style={{ fontSize:11, color:"#b9cee2" }}>{d.producto} · {tipoLabel}</p>

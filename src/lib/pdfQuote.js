@@ -78,21 +78,9 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   doc.text(`N° ${presNro}`, W - M, 16, { align: "right" });
   doc.text(`Fecha: ${fechaStr}  ·  Válido hasta: ${validez}`, W - M, 20.5, { align: "right" });
 
-  /* ── Título del presupuesto ── */
-  let y = 39.5;
-  doc.setTextColor(...ink); doc.setFont("helvetica", "bold"); doc.setFontSize(12.5);
-  doc.text(`${(d.nombre || "Cliente").slice(0, 48)}`, M, y);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...gray);
-  doc.text(`${(d.producto || "").slice(0, 60)}`, M, y + 5);
-  // chip de modalidad a la derecha
-  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...(r.isDhl ? orange : blue));
-  doc.text(tipo, W - M, y, { align: "right" });
-  if (del) {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...gray);
-    doc.text(`Entrega estimada: ${del.min} a ${del.max} días hábiles${del.remote ? " · zona extendida" : ""}`, W - M, y + 5, { align: "right" });
-  }
-
-  let cursorY = y + 9;
+  /* Cliente, producto y modalidad van SOLO en la tabla de datos (pedido de
+     Francisco: sin duplicados arriba) — las secciones arrancan directo. */
+  let cursorY = 36;
   let nSec = 0;
   const section = (title, body, opts2 = {}) => {
     nSec++;
@@ -115,9 +103,9 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   };
 
   /* ── 1 · Datos en DOS columnas (compacto y prolijo) ── */
-  // Cliente y producto YA están en el encabezado grande — acá no se repiten
   const cw = (W - 2 * M) / 4;
   const datos = [
+    ["Cliente", (d.nombre || "—").slice(0, 34), "Producto", (d.producto || "—").slice(0, 38)],
     ["WhatsApp", d.whatsapp || "—", "País de origen", d.paisOrigen || (r.isDhl ? "China" : "—")],
     ["Email", (d.email || "—").slice(0, 32), "HS Code", d.hsCode || "—"],
     ["Código postal", d.cp || "—", "Tipo de envío", tipo],

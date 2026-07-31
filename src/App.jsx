@@ -762,10 +762,6 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const formVol = packTotals(form.bultosIguales ? { ...form, packageGroups: [] } : form).volCm3;
   const pVol  = byWeight && formVol > 0 ? formVol / 5000 : 0;
   const pFact = Math.max(pVol, +form.peso || 0);
-  const pVolDhl  = formVol > 0 ? formVol / (+settings.dhlDivisor > 0 ? +settings.dhlDivisor : 5000) : 0;
-  const pFactDhl = Math.max(pVolDhl, +form.peso || 0);
-  const dhlPreview = settings.dhlActive && settings.dhlPublic && form.subTipo !== "personal"
-    && (!form.origenSel || form.origenSel === "China");
   const m3p   = +form.m3manual || 0;
   const m3f   = Math.max(+settings.seaMin || 1, m3p);
 
@@ -1164,12 +1160,12 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
           {form.tipo === "avion" && formVol > 0 && form.peso && (
             <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Avión{dhlPreview ? " y DHL" : ""}</p>
-              <div style={{ display:"grid", gridTemplateColumns:`repeat(${dhlPreview ? 4 : 3}, 1fr)`, gap:8, fontSize:12 }}>
+              {/* Aéreo y DHL comparten divisor 5.000 → un único peso facturable */}
+              <p style={{ fontSize:12, fontWeight:700, color:"#0f3d68", marginBottom:8 }}>Vista previa · Aéreo</p>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8, fontSize:12 }}>
                 <div><p style={{ color:"#94a3b8" }}>Peso volumétrico</p><p style={{ fontWeight:700 }}>{fmt(pVol)} kg</p></div>
                 <div><p style={{ color:"#94a3b8" }}>Peso real</p><p style={{ fontWeight:700 }}>{fmt(+form.peso)} kg</p></div>
-                <div><p style={{ color:"#0f3d68" }}>Facturable aéreo</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(pFact)} kg</p></div>
-                {dhlPreview && <div><p style={{ color:"#d9590f" }}>Facturable DHL</p><p style={{ fontWeight:700, color:"#d9590f" }}>{fmt(pFactDhl)} kg</p></div>}
+                <div><p style={{ color:"#0f3d68" }}>Peso facturable</p><p style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(pFact)} kg</p></div>
               </div>
             </div>
           )}

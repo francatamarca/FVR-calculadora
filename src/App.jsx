@@ -762,7 +762,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const formVol = packTotals(form.bultosIguales ? { ...form, packageGroups: [] } : form).volCm3;
   const pVol  = byWeight && formVol > 0 ? formVol / 5000 : 0;
   const pFact = Math.max(pVol, +form.peso || 0);
-  const pVolDhl  = formVol > 0 ? formVol / (+settings.dhlDivisor > 0 ? +settings.dhlDivisor : 4000) : 0;
+  const pVolDhl  = formVol > 0 ? formVol / (+settings.dhlDivisor > 0 ? +settings.dhlDivisor : 5000) : 0;
   const pFactDhl = Math.max(pVolDhl, +form.peso || 0);
   const dhlPreview = settings.dhlActive && settings.dhlPublic && form.subTipo !== "personal"
     && (!form.origenSel || form.origenSel === "China");

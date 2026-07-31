@@ -17,7 +17,7 @@ export const DEF = {
   // ACTIVADO públicamente el 30/07/2026 tras validación de Francisco en el interno.
   dhlActive: true, dhlPublic: true,
   dhlMinKg: 10,            // peso facturable mínimo para ofrecer DHL
-  dhlDivisor: 4000,        // divisor volumétrico DHL (NO el 5.000 aéreo)
+  dhlDivisor: 5000,        // divisor volumétrico DHL (igual al aéreo — corregido 31/07/2026)
   dhlRateBreak: 30,        // desde este peso aplica la tarifa alta
   dhlRateLow: 20,          // USD/kg desde 10 kg y menos de 30 kg
   dhlRateHigh: 15,         // USD/kg desde 30 kg
@@ -58,7 +58,7 @@ export const packTotals = (d) => {
 /* ── DHL EXPRESS (motor independiente — no toca la fórmula aérea) ──
    Solo China + envío comercial + peso facturable ≥ dhlMinKg.
    Particularidades (ver docs/IMPLEMENTACION_DHL_FVR.md):
-   - Divisor volumétrico 4.000 (no 5.000).
+   - Divisor volumétrico 5.000 (igual al aéreo; configurable).
    - "Flete estimado para base aduanera" (USD 3/kg): SOLO forma seguro,
      CIF y tributos — NO se cobra ni se suma al total.
    - "Flete internacional" cobrado: tarifa 20/kg (10–<30 kg) o 15/kg (≥30).
@@ -68,7 +68,7 @@ export const calculateDhl = (d, s) => {
   const fob  = +d.fob || 0;
   const peso = +d.peso || 0;
   const { volCm3 } = packTotals(d);
-  const divisor = +s.dhlDivisor > 0 ? +s.dhlDivisor : 4000;
+  const divisor = +s.dhlDivisor > 0 ? +s.dhlDivisor : 5000;
   const pVol  = volCm3 / divisor;
   const pFact = Math.max(peso, pVol);
 

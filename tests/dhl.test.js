@@ -14,7 +14,7 @@ describe("DHL — Caso A obligatorio (10 kg, FOB 1.000, derecho 20%)", () => {
   const d = { tipo: "dhl", fob: 1000, peso: 10, largo: 20, ancho: 20, alto: 20, aiDutyRate: 20, origenSel: "China", subTipo: "comercial" };
   const r = calculateDhl(d, S);
   it("peso volumétrico < peso real → facturable 10 kg", () => {
-    expect(r.pVol).toBeCloseTo(8000 / 4000, 6); // 2 kg
+    expect(r.pVol).toBeCloseTo(8000 / 5000, 6); // 1,6 kg (divisor 5.000, igual al aéreo)
     expect(r.pFact).toBe(10);
   });
   it("flete base aduanera USD 30,00 (NO se cobra)", () => near(r.fleteBase, 30));
@@ -55,10 +55,13 @@ describe("DHL — límites de tramo sin errores de borde", () => {
   it("10,000 kg usa USD 20/kg", () => expect(calculateDhl({ ...base, peso: 10 }, S).airRate).toBe(20));
   it("29,999 kg usa USD 20/kg", () => expect(calculateDhl({ ...base, peso: 29.999 }, S).airRate).toBe(20));
   it("30,000 kg usa USD 15/kg", () => expect(calculateDhl({ ...base, peso: 30 }, S).airRate).toBe(15));
-  it("el peso facturable puede venir del volumétrico (divisor 4.000)", () => {
-    // 50×40×60 = 120.000 cm³ / 4.000 = 30 kg volumétrico vs 5 kg reales
+  it("el peso facturable puede venir del volumétrico (divisor 5.000, igual al aéreo)", () => {
+    // 50×40×60 = 120.000 cm³ / 5.000 = 24 kg volumétrico vs 5 kg reales → tramo bajo
     const r = calculateDhl({ ...base, peso: 5, largo: 50, ancho: 40, alto: 60 }, S);
-    expect(r.pVol).toBe(30); expect(r.pFact).toBe(30); expect(r.airRate).toBe(15);
+    expect(r.pVol).toBe(24); expect(r.pFact).toBe(24); expect(r.airRate).toBe(20);
+    // 50×50×60 = 150.000 cm³ / 5.000 = 30 kg volumétrico → cruza al tramo de 15/kg
+    const r2 = calculateDhl({ ...base, peso: 5, largo: 50, ancho: 50, alto: 60 }, S);
+    expect(r2.pVol).toBe(30); expect(r2.pFact).toBe(30); expect(r2.airRate).toBe(15);
   });
 });
 
@@ -73,8 +76,8 @@ describe("DHL — elegibilidad (China + comercial + ≥10 kg)", () => {
     const e = dhlEligibility({ ...ok, peso: 4 }, S);
     expect(e).toMatchObject({ ok: false, reason: "peso" });
   });
-  it("9 kg reales pero volumétrico 12 kg → SÍ elegible (facturable manda)", () => {
-    expect(dhlEligibility({ ...ok, peso: 9, largo: 40, ancho: 40, alto: 30 }, S).ok).toBe(true); // 48.000/4.000 = 12
+  it("9 kg reales pero volumétrico 12,8 kg → SÍ elegible (facturable manda)", () => {
+    expect(dhlEligibility({ ...ok, peso: 9, largo: 40, ancho: 40, alto: 40 }, S).ok).toBe(true); // 64.000/5.000 = 12,8
   });
   it("dhlActive false → NO", () => expect(dhlEligibility(ok, { ...S, dhlActive: false }).ok).toBe(false));
 });
@@ -89,9 +92,9 @@ describe("Bultos múltiples — Σ(cant × L×A×H) para todas las modalidades",
     expect(t.volCm3).toBe(128000);
     expect(t.pesoGrupos).toBe(20);
   });
-  it("DHL usa divisor 4.000 sobre el total", () => {
+  it("DHL usa divisor 5.000 sobre el total (igual al aéreo)", () => {
     const r = calculateDhl({ tipo: "dhl", fob: 100, peso: 20, ...grupos, aiDutyRate: 0 }, S);
-    expect(r.pVol).toBe(32); expect(r.pFact).toBe(32);
+    expect(r.pVol).toBeCloseTo(25.6, 6); expect(r.pFact).toBeCloseTo(25.6, 6);
   });
   it("aéreo usa divisor 5.000 sobre el mismo total", () => {
     const r = calculate({ tipo: "avion", subTipo: "comercial", fob: 100, peso: 20, ...grupos, aiDutyRate: 0 }, S);

@@ -27,6 +27,8 @@ const casos = [
   { tag: "aereo", d: { ...base, tipo: "avion", subTipo: "comercial" } },
   { tag: "dhl",   d: { ...base, tipo: "dhl" } },
   { tag: "personal", d: { ...base, tipo: "avion", subTipo: "personal", fob: "350" } },
+  { tag: "maritimo-kg", d: { ...base, tipo: "barco", seaMode: "kg" } },
+  { tag: "maritimo-m3", d: { ...base, tipo: "barco", seaMode: "m3", m3manual: "1.5" } },
 ];
 
 for (const { tag, d } of casos) {

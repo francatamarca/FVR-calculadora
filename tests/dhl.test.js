@@ -140,15 +140,16 @@ describe("REGRESIÓN CONGELADA — presupuesto aéreo de referencia (no puede ca
   const r = calculate(d, s);
   it("peso volumétrico 0,20 kg / facturable 1 kg", () => { near(r.pVol, 0.2); expect(r.pFact).toBe(1); });
   it("flete aéreo USD 25,00", () => near(r.flete, 25, 2));
-  it("seguro USD 10,24", () => near(r.seguro, 10.24, 2));
-  it("CIF USD 1.034,24", () => near(r.cif, 1034.24, 2));
-  it("derecho USD 186,16", () => near(r.duty, 186.16, 2));
-  it("tasa estadística USD 31,03", () => near(r.stat, 31.03, 2));
-  it("base imponible IVA USD 1.251,43", () => near(r.ivaBase, 1251.43, 2));
-  it("IVA USD 262,80", () => near(r.iva, 262.80, 2));
+  it("flete base aduanera USD 3,00 (NO se cobra)", () => near(r.fleteBase, 3, 2));
+  it("seguro USD 10,02", () => near(r.seguro, 10.02, 2));
+  it("CIF USD 1.012,02", () => near(r.cif, 1012.02, 2));
+  it("derecho USD 182,16", () => near(r.duty, 182.16, 2));
+  it("tasa estadística USD 30,36", () => near(r.stat, 30.36, 2));
+  it("base imponible IVA USD 1.224,54", () => near(r.ivaBase, 1224.54, 2));
+  it("IVA USD 257,15", () => near(r.iva, 257.15, 2));
   it("honorarios USD 89,91", () => near(r.fees, 89.91, 2));
-  it("total servicio USD 640,14", () => near(r.totalLog, 640.14, 2));
-  it("total general USD 1.639,14", () => near(r.totalGen, 1639.14, 2));
+  it("total servicio USD 629,61", () => near(r.totalLog, 629.61, 2));
+  it("total general USD 1.628,61", () => near(r.totalGen, 1628.61, 2));
   it("agregar DHL no toca la fórmula aérea: mismos resultados con dhl config presente", () => {
     const r2 = calculate(d, { ...s, dhlActive: true, dhlPublic: true });
     expect(r2.totalGen).toBe(r.totalGen);

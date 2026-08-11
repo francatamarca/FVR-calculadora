@@ -246,7 +246,7 @@ Respondé ÚNICAMENTE JSON sin markdown: {"hsCode":"XXXX.XX.XX","description":".
       if (!/^\d{4}/.test(code.replace(/\./g, ""))) throw new Error("código IA inválido");
       const c8 = code.replace(/\./g, "").slice(0, 8);
       // Validación: el código debe existir en la base oficial; si no, se degrada
-      if (NCM8[c8] === undefined && localFlat.precision !== "GENERIC_FALLBACK") return send(res, localFlat);
+      if (NCM8[c8] === undefined) return send(res, localFlat);
       const flat = toLegacyShape(classifyCode(code));
       flat.hsCode = parsed.hsCode;
       if (parsed.description) flat.description = String(parsed.description).slice(0, 200);

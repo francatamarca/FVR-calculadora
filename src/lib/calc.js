@@ -5,6 +5,7 @@
 
 export const DEF = {
   airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 8,
+  airCustomsPerKg: 3, seaCustomsPerM3: 50,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
@@ -156,8 +157,23 @@ export const calculate = (d, s) => {
     flete  = m3Fact * (+s.seaRate || 0);
   }
 
-  const seguro = (fob + flete) * ((+s.insurance || 0) / 100);
-  const cif    = fob + flete + seguro;
+  /* La tarifa comercial de transporte y el flete usado para valorar en
+     Aduana son conceptos distintos. El primero se cobra al cliente; el
+     segundo solo forma seguro, CIF y tributos y nunca se duplica en el total.
+
+     - Aereo (personal y comercial): peso facturable x USD 3/kg.
+     - Maritimo por m3: volumen facturable x USD 50/m3.
+     - Maritimo por kg: conserva su formula historica hasta que se configure
+       una base aduanera especifica para esa modalidad. */
+  const customsPerUnit = isAir ? (+s.airCustomsPerKg || 0)
+    : seaM3 ? (+s.seaCustomsPerM3 || 0)
+    : null;
+  const fleteBase = isAir ? pFact * customsPerUnit
+    : seaM3 ? m3Fact * customsPerUnit
+    : flete;
+
+  const seguro = (fob + fleteBase) * ((+s.insurance || 0) / 100);
+  const cif    = fob + fleteBase + seguro;
 
   // Arancel efectivo: categoría / IA / HS / manual (aiDutyRate) o el default de settings
   const effectiveDutyPct = (d.aiDutyRate !== null && d.aiDutyRate !== undefined)
@@ -165,11 +181,12 @@ export const calculate = (d, s) => {
 
   let duty = 0, stat = 0, ivaBase = 0, iva = 0, addVat = 0, gains = 0, ib = 0;
   if (isPersonal) {
-    // Franquicia USD 400: derechos solo sobre el excedente, con la tasa del HS code
-    const excedentePersonal = Math.max(0, fob - 400);
+    // La franquicia se aplica sobre el valor aduanero; el flete comercial no
+    // entra en la base, pero si el flete aduanero estimado de USD 3/kg.
+    const excedentePersonal = Math.max(0, cif - 400);
     duty = excedentePersonal * (effectiveDutyPct / 100);
-    // IVA sobre el FOB mas los derechos (= 21% s/400 + 21% s/(excedente + derechos))
-    iva  = (fob + duty) * ((+s.vat || 0) / 100);
+    ivaBase = cif + duty;
+    iva  = ivaBase * ((+s.vat || 0) / 100);
   } else {
     duty    = cif * (effectiveDutyPct / 100);
     stat    = cif * ((+s.stat || 0) / 100);
@@ -224,7 +241,7 @@ export const calculate = (d, s) => {
   return {
     fob, isAir, seaKg, seaM3, byWeight, internalTaxes, isPersonal, hasHandling,
     peso, pVol, pFact, m3, m3Fact, airRate,
-    flete, seguro, cif, duty, stat, ivaBase, iva,
+    flete, fleteBase, customsPerUnit, seguro, cif, duty, stat, ivaBase, iva,
     addVat, gains, ib, pickup, handling, domestic, fees,
     totalLog, totalGen, effectiveDutyPct, cantidad, unitario,
   };
@@ -241,22 +258,25 @@ export const compareModes = (d, s) => {
 
   const out = [];
   if (+d.peso > 0 && volCm3 > 0) {
+    const data = { ...d, tipo: "avion", subTipo: d.subTipo === "personal" ? "personal" : "comercial" };
     out.push({ key: "aereo", label: "✈️ Aéreo", nota: "Más rápido",
-      r: calculate({ ...d, tipo: "avion", subTipo: d.subTipo === "personal" ? "personal" : "comercial" }, s) });
+      d: data, r: calculate(data, s) });
   }
   // DHL: solo China + comercial + ≥ mínimo (el flag público no aplica acá —
   // el comparador lo usa la calculadora interna)
   const dhlE = dhlEligibility(d, s);
   if (dhlE.ok) {
-    out.push({ key: "dhl", label: "⚡ DHL Express", nota: "Más rápido", r: dhlE.r });
+    out.push({ key: "dhl", label: "⚡ DHL Express", nota: "Más rápido", d: { ...d, tipo: "dhl", subTipo: "comercial" }, r: dhlE.r });
   }
   if (+d.peso > 0) {
+    const data = { ...d, tipo: "barco", seaMode: "kg" };
     out.push({ key: "barcoKg", label: "🚢 Barco por kilo", nota: "Ideal bajo peso",
-      r: calculate({ ...d, tipo: "barco", seaMode: "kg" }, s) });
+      d: data, r: calculate(data, s) });
   }
   if (m3Est > 0) {
+    const data = { ...d, tipo: "barco", seaMode: "m3", m3manual: m3Est };
     out.push({ key: "barcoM3", label: "🚢 Barco por m³", nota: "Ideal volumen",
-      r: calculate({ ...d, tipo: "barco", seaMode: "m3", m3manual: m3Est }, s), m3Usado: m3Est });
+      d: data, r: calculate(data, s), m3Usado: m3Est });
   }
   if (out.length > 1) {
     const min = out.reduce((a, b) => (b.r.totalGen < a.r.totalGen ? b : a));

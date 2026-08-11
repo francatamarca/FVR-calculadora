@@ -1,5 +1,5 @@
 # Actualización automática de la base arancelaria (DIE ARCA)
-# - Corre todos los lunes a las 09:00 AR (12:00 UTC) y a demanda.
+# - Corre todos los días a las 07:00 AR (10:00 UTC) y a demanda.
 # - Descarga el arancel.zip oficial, regenera la base y corre los tests.
 # - Si hay cambios, abre un PULL REQUEST: nunca publica solo — Francisco
 #   revisa el diff y mergea (el merge dispara el deploy de Vercel).
@@ -9,7 +9,7 @@ name: tariff-update
 
 on:
   schedule:
-    - cron: "0 12 * * 1"
+    - cron: "0 10 * * *"
   workflow_dispatch: {}
 
 permissions:

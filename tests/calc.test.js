@@ -26,8 +26,9 @@ describe("aéreo comercial — tributos", () => {
   const r = calculate(baseAereo, S);
   it("CIF = FOB + flete + seguro", () => {
     expect(r.flete).toBeCloseTo(230); // 10 kg × 23
-    expect(r.seguro).toBeCloseTo((1000 + 230) * 0.01);
-    expect(r.cif).toBeCloseTo(1000 + 230 + 12.3);
+    expect(r.fleteBase).toBeCloseTo(30);
+    expect(r.seguro).toBeCloseTo((1000 + 30) * 0.01);
+    expect(r.cif).toBeCloseTo(1000 + 30 + 10.3);
   });
   it("derecho s/CIF, tasa s/CIF, IVA s/(CIF+der+tasa), sin impuestos internos", () => {
     expect(r.duty).toBeCloseTo(r.cif * 0.20);
@@ -40,23 +41,32 @@ describe("aéreo comercial — tributos", () => {
 describe("franquicia personal (aéreo)", () => {
   it("FOB 500, arancel 20% → derecho 20; IVA 109,20 (regla validada por el dueño)", () => {
     const r = calculate({ ...baseAereo, subTipo: "personal", fob: "500" }, S);
-    expect(r.duty).toBeCloseTo(20);        // 20% × (500-400)
-    expect(r.iva).toBeCloseTo(109.2);      // 21% × (500+20)
+    expect(r.flete).toBeCloseTo(230);
+    expect(r.fleteBase).toBeCloseTo(30);
+    expect(r.cif).toBeCloseTo(535.3);
+    expect(r.duty).toBeCloseTo(27.06);
+    expect(r.iva).toBeCloseTo(118.0956);
     expect(r.stat).toBe(0);
   });
   it("FOB ≤ 400 → exento de derechos, IVA sobre FOB", () => {
     const r = calculate({ ...baseAereo, subTipo: "personal", fob: "300" }, S);
     expect(r.duty).toBe(0);
-    expect(r.iva).toBeCloseTo(63); // 21% × 300
+    expect(r.cif).toBeCloseTo(333.3);
+    expect(r.iva).toBeCloseTo(69.993);
   });
 });
 
 describe("barco por m³ (LCL)", () => {
   const d = { tipo: "barco", seaMode: "m3", fob: "1000", peso: "50", m3manual: "2", aiDutyRate: 20 };
   it("flete = max(m³, mínimo) × tarifa; mínimo facturable aplica", () => {
-    expect(calculate(d, S).flete).toBeCloseTo(1200);                       // 2 m³ × 600
+    const r = calculate(d, S);
+    expect(r.flete).toBeCloseTo(1200);
+    expect(r.fleteBase).toBeCloseTo(100);
+    expect(r.seguro).toBeCloseTo(11);
+    expect(r.cif).toBeCloseTo(1111);
     expect(calculate({ ...d, m3manual: "0.4" }, S).m3Fact).toBe(1);        // mínimo 1 m³
     expect(calculate({ ...d, m3manual: "0.4" }, S).flete).toBeCloseTo(600);
+    expect(calculate({ ...d, m3manual: "0.4" }, S).fleteBase).toBeCloseTo(50);
   });
   it("tiene impuestos internos y NO handling", () => {
     const r = calculate(d, S);

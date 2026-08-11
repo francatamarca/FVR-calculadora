@@ -147,7 +147,6 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
       [`Flete aéreo (USD ${r.airRate}/kg)`, USD(r.flete)],
       [`Seguro (${s.insurance}%)`, USD(r.seguro)],
-      ["CIF / Valor en aduana", USD(r.cif)],
     );
   } else if (r.seaKg) {
     flete.push(
@@ -162,16 +161,22 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       [`Volumen facturable (mín. ${s.seaMin} m³)`, `${fmt(r.m3Fact, 3)} m³`],
       [`Flete marítimo (USD ${s.seaRate}/m³)`, USD(r.flete)],
       [`Seguro (${s.insurance}%)`, USD(r.seguro)],
-      ["CIF / Valor en aduana", USD(r.cif)],
     );
   }
   section("FLETE INTERNACIONAL", flete);
 
-  /* ── DHL: base aduanera con nota ── */
+  /* ── Base aduanera separada del flete comercial ── */
   if (r.isDhl) {
     section("BASE ADUANERA (SOLO PARA TRIBUTOS)", [
       [`Flete estimado para base aduanera (USD ${r.customsPerKg}/kg)`, USD(r.fleteBase)],
       [{ content: "Este importe se usa únicamente para estimar la base imponible — NO es un cargo adicional y no se suma al total.", colSpan: 2, styles: { fontSize: 7.2, fontStyle: "italic", textColor: gray, fillColor: [255, 250, 240] } }],
+      ["CIF / Valor en aduana", USD(r.cif)],
+    ]);
+  } else if (r.customsPerUnit != null) {
+    const unidad = r.isAir ? "kg" : "m³";
+    section("BASE ADUANERA (SOLO PARA TRIBUTOS)", [
+      [`Flete estimado para base aduanera (USD ${r.customsPerUnit}/${unidad})`, USD(r.fleteBase)],
+      [{ content: "Este importe se usa únicamente para estimar seguro, CIF y tributos — NO es un cargo adicional y no se suma al total.", colSpan: 2, styles: { fontSize: 7.2, fontStyle: "italic", textColor: gray, fillColor: [255, 250, 240] } }],
       ["CIF / Valor en aduana", USD(r.cif)],
     ]);
   }
@@ -179,9 +184,9 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   /* ── Impuestos y tributos ── */
   const trib = [];
   if (r.isPersonal) {
-    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix})${r.fob <= 400 ? " — exento hasta USD 400" : " sobre excedente de USD 400"}`, USD(r.duty)]);
+    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix})${r.cif <= 400 ? " — exento hasta USD 400" : " sobre excedente de USD 400"}`, USD(r.duty)]);
     trib.push(["Tasa estadística", "No aplica"]);
-    trib.push([`IVA (${s.vat}% sobre FOB + derechos)`, USD(r.iva)]);
+    trib.push([`IVA (${s.vat}% sobre valor aduanero + derechos)`, USD(r.iva)]);
   } else {
     trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix})`, USD(r.duty)]);
     trib.push([`Tasa estadística (${s.stat}%)`, USD(r.stat)]);
@@ -255,5 +260,6 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   doc.text(`Presupuesto válido hasta el ${validez}. Valores en USD con su equivalente en ARS al dólar oficial.`, M, cursorY + 8);
 
   const safeName = (d.nombre || "cliente").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 40).replace(/\s+/g, "-") || "cliente";
-  return { doc, filename: `Presupuesto-FVR-${safeName}.pdf` };
+  const safeLabel = String(opts.filenameLabel || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 30).replace(/\s+/g, "-");
+  return { doc, filename: `Presupuesto-FVR-${safeName}${safeLabel ? `-${safeLabel}` : ""}.pdf` };
 }

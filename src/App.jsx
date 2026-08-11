@@ -217,7 +217,7 @@ const buildWAMsg = (d, r, rate, s) => {
       ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty))
       : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
     r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
-    r.isPersonal ? ("IVA (" + s.vat + "% s/FOB + derechos): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
+    r.isPersonal ? ("IVA (" + s.vat + "% s/CIF + derechos): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
     ...(r.internalTaxes && !r.isPersonal
       ? [
           "IVA adicional (" + s.addVat + "%): " + USD(r.addVat),
@@ -292,10 +292,10 @@ const buildShortSummary = (d, r, rate, s = {}) => {
 /* ── PDF REAL (vectorial, jsPDF) ─────────────────────────── */
 const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · IA" : ""));
 
-const generatePDF = async (d, r, dolar, s) => {
+const generatePDF = async (d, r, dolar, s, opts = {}) => {
   // Layout en src/lib/pdfQuote.js (renderizable también desde Node para revisarlo)
   const { buildQuotePDF } = await import("./lib/pdfQuote.js");
-  const { doc, filename } = await buildQuotePDF(d, r, dolar, s);
+  const { doc, filename } = await buildQuotePDF(d, r, dolar, s, opts);
   doc.save(filename);
 };
 
@@ -451,7 +451,7 @@ const SubTipoSel = ({ value, onChange }) => (
     </div>
     {value === "personal" && (
       <div style={{ marginTop:10, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:12, fontSize:12, color:"#92400e" }}>
-        <strong>🏷️ Franquicia personal:</strong> Exento de derechos de importación hasta USD 400. Sobre el excedente se aplica el <strong>arancel del producto según su HS code</strong>. Tasa estadística <strong>no aplica</strong>. IVA 21% sobre el FOB + los derechos.
+        <strong>🏷️ Franquicia personal:</strong> Exento de derechos de importación hasta USD 400 de valor aduanero. Sobre el excedente se aplica el <strong>arancel del producto según su HS code</strong>. Tasa estadística <strong>no aplica</strong>. IVA 21% sobre el valor aduanero + los derechos.
       </div>
     )}
   </div>
@@ -1385,8 +1385,8 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             <div>
               <p style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>Franquicia de envío personal activa</p>
               <p style={{ fontSize:12, color:"#b45309" }}>
-                {r.fob <= 400 ? "FOB ≤ USD 400 — Exento de derechos de importación." : `Excedente de USD 400: ${USD(r.fob - 400)}. Derechos al ${r.effectiveDutyPct}% (HS code) sobre el excedente.`}
-                {" "}Tasa estadística y demás impuestos no aplican. IVA {s.vat}% sobre FOB + derechos.
+                {r.cif <= 400 ? "Valor aduanero ≤ USD 400 — Exento de derechos de importación." : `Excedente de USD 400: ${USD(r.cif - 400)}. Derechos al ${r.effectiveDutyPct}% (HS code) sobre el excedente.`}
+                {" "}Tasa estadística no aplica. IVA {s.vat}% sobre valor aduanero + derechos.
               </p>
             </div>
           </div>
@@ -1463,15 +1463,15 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         </Card>
 
         <Card icon="🛡️" title="Seguro y valor CIF">
-          <Row label={`Seguro (${s.insurance}% sobre FOB + flete)`} usd={r.seguro} dolar={dolar} />
-          <Row label="CIF = FOB + Flete + Seguro" usd={r.cif} dolar={dolar} hi />
+          <Row label={`Seguro internacional (${s.insurance}%)`} usd={r.seguro} dolar={dolar} />
+          <Row label="CIF estimado / Valor en aduana" usd={r.cif} dolar={dolar} hi />
         </Card>
 
         <Card icon="🏛️" title="Tributos aduaneros">
           {r.isPersonal ? (<>
             <Row label={`Derecho de importación (${r.effectiveDutyPct}%)`} usd={r.duty} dolar={dolar}
-              note={r.fob <= 400 ? "FOB ≤ USD 400 — Exento" : `${r.effectiveDutyPct}% sobre USD ${fmt(r.fob - 400)} de excedente`} />
-            <Row label={`IVA (${s.vat}% sobre FOB + derechos)`} usd={r.iva} dolar={dolar} />
+              note={r.cif <= 400 ? "Valor aduanero ≤ USD 400 — Exento" : `${r.effectiveDutyPct}% sobre USD ${fmt(r.cif - 400)} de excedente`} />
+            <Row label={`IVA (${s.vat}% sobre valor aduanero + derechos)`} usd={r.iva} dolar={dolar} />
           </>) : (<>
             <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · IA" : ""))})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
@@ -1921,8 +1921,9 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
                 <SettingField s={s} setS={setS} label="🇺🇸 Estados Unidos" k="airRateUSA"/>
                 <SettingField s={s} setS={setS} label="🇨🇳 China" k="airRateChina"/>
                 <SettingField s={s} setS={setS} label="🇪🇸 España" k="airRateEspana"/>
+                <SettingField s={s} setS={setS} label="Base aduanera aérea (USD/kg)" k="airCustomsPerKg" min={0}/>
               </div>
-              <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa es fija por kg (no varía con el peso). Cualquier otro país de origen usa la tarifa de China.</p>
+              <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa comercial se cobra por kg. La base aduanera aérea solo forma seguro, CIF y tributos; no se cobra como importe adicional. Cualquier otro país usa la tarifa de China.</p>
             </Card>
 
             <Card icon="⚡" title="DHL Express — China a Argentina">
@@ -1960,6 +1961,7 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             <Card icon="🚢" title="Flete marítimo">
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                 <SettingField s={s} setS={setS} label="Tarifa por m³ (USD / m³)" k="seaRate"/><SettingField s={s} setS={setS} label="Mínimo facturable (m³)" k="seaMin"/>
+                <SettingField s={s} setS={setS} label="Base aduanera por volumen (USD/m³)" k="seaCustomsPerM3" min={0}/>
               </div>
               <SettingField s={s} setS={setS} label="⚖️ Tarifa por kilo (USD / kg)" k="seaRateKg"/>
               <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>La modalidad marítima "por kilo" se calcula con los mismos impuestos que el aéreo comercial; lo único que cambia es esta tarifa por kg.</p>
@@ -2083,7 +2085,8 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
 const OV_FIELDS = [
   ["duty", "Derecho importación (%)"], ["stat", "Tasa estadística (%)"], ["vat", "IVA (%)"],
   ["insurance", "Seguro (%)"], ["airRateChina", "Aéreo China (USD/kg)"], ["airRateUSA", "Aéreo USA (USD/kg)"],
-  ["airRateEspana", "Aéreo España (USD/kg)"], ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"],
+  ["airRateEspana", "Aéreo España (USD/kg)"], ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
+  ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
   ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
   ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up (USD)"], ["handling", "Handling avión (USD)"],
   ["handlingSea", "Handling marítimo kg (USD)"],
@@ -2131,6 +2134,27 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
     setPdfLoading(false);
   };
 
+  const doBestPDFs = async () => {
+    if (pdfLoading) return;
+    const cheapest = (keys) => modos
+      .filter(m => keys.includes(m.key))
+      .reduce((best, m) => !best || m.r.totalGen < best.r.totalGen ? m : best, null);
+    const air = cheapest(["aereo", "dhl"]);
+    const sea = cheapest(["barcoKg", "barcoM3"]);
+    if (!air && !sea) return;
+    setPdfLoading(true);
+    try {
+      for (const [label, mode] of [["Aereo-mas-economico", air], ["Maritimo-mas-economico", sea]]) {
+        if (!mode) continue;
+        await generatePDF(
+          { ...mode.d, nombre: d.nombre || "Cotización interna", whatsapp: d.whatsapp || "—" },
+          mode.r, rate, s, { filenameLabel: label },
+        );
+      }
+    } catch { alert("No se pudieron generar las dos opciones en PDF."); }
+    setPdfLoading(false);
+  };
+
   const detalleTecnico = () => r.isDhl ? [
     `COTIZACIÓN INTERNA FVR — DHL EXPRESS — ${d.producto || "sin producto"}`,
     `Origen: China · Comercial${d.cp ? ` · CP ${d.cp}` : ""}`,
@@ -2147,7 +2171,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
     `COTIZACIÓN INTERNA FVR — ${d.producto || "sin producto"}`,
     `Modalidad: ${d.tipo === "avion" ? "Aéreo" : d.seaMode === "kg" ? "Marítimo kg" : "Marítimo m³"} · Origen: ${d.origenSel}`,
     `FOB ${USD(r.fob)} · ${r.byWeight ? `Peso fact. ${fmt(r.pFact)} kg × ${r.airRate}/kg` : `Vol ${fmt(r.m3Fact, 2)} m³ × ${s.seaRate}/m³`}`,
-    `Flete ${USD(r.flete)} · Seguro ${USD(r.seguro)} · CIF ${USD(r.cif)}`,
+    `Flete cobrado ${USD(r.flete)}${r.customsPerUnit != null ? ` · Base aduanera ${USD(r.fleteBase)} (NO se cobra)` : ""} · Seguro ${USD(r.seguro)} · CIF ${USD(r.cif)}`,
     `Derecho ${r.effectiveDutyPct}% ${USD(r.duty)} · Tasa est. ${USD(r.stat)} · IVA ${USD(r.iva)}`,
     r.internalTaxes ? `IVA adic. ${USD(r.addVat)} · Ganancias ${USD(r.gains)} · IIBB ${USD(r.ib)}` : null,
     `Pickup ${USD(r.pickup)} · Handling ${USD(r.handling)} · Envío nac. ${USD(r.domestic)} · Honorarios ${USD(r.fees)}`,
@@ -2270,6 +2294,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: 12, color: "#dbe8f6" }}>
                 <span>Flete: {USD(r.flete)}</span><span>CIF: {USD(r.cif)}</span>
+                {r.customsPerUnit != null && <span>Base aduanera ({r.customsPerUnit}/{r.isAir ? "kg" : "m³"}): {USD(r.fleteBase)}</span>}
                 <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
                 <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
                 <span>Handling: {USD(r.handling)}{r.hasHandling && r.handling === 0 ? ` (no aplica: peso ≥ ${d.tipo === "avion" ? (s.handlingMaxKg ?? 3) : (s.handlingMaxKgSea ?? 3)} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
@@ -2308,6 +2333,10 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
             <button onClick={doPDF} disabled={pdfLoading}
               style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0f3d68,#18548a)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
               {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "dhl" ? "DHL" : d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
+            </button>
+            <button onClick={doBestPDFs} disabled={pdfLoading || modos.length === 0}
+              style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "2px solid #f26c1e", background: "white", color: "#d9590f", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
+              {pdfLoading ? "⏳ Generando…" : "📄 Generar aérea + marítima más económicas"}
             </button>
           </div>
           <p style={{ fontSize: 11, color: "#64748b", marginTop: 10, textAlign: "center" }}>Nada se guarda automáticamente: esta pantalla es solo para cotizar rápido.</p>

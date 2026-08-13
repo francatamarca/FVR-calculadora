@@ -83,16 +83,17 @@ describe("barco por kilo", () => {
   it("cobra por peso REAL: ignora el volumétrico aunque haya medidas", () => {
     const r = calculate(d, S);
     expect(r.pFact).toBe(2);              // real, NO 25 volumétrico
-    expect(r.flete).toBeCloseTo(16);      // 2 kg × 8
+    expect(r.flete).toBeCloseTo(26);      // 2 kg × 13
   });
   it("tributos de aéreo comercial, SIN impuestos internos", () => {
     const r = calculate(d, S);
     expect(r.stat).toBeGreaterThan(0);
     expect(r.addVat).toBe(0); expect(r.gains).toBe(0); expect(r.ib).toBe(0);
   });
-  it("handling con umbral propio sobre peso real (2<3 → cobra; 5≥3 → 0)", () => {
-    expect(calculate(d, S).handling).toBe(15);
-    expect(calculate({ ...d, peso: "5" }, S).handling).toBe(0);
+  it("sin pick up y con handling fijo de USD 20, sin límite por peso", () => {
+    expect(calculate(d, S).pickup).toBe(0);
+    expect(calculate(d, S).handling).toBe(20);
+    expect(calculate({ ...d, peso: "50" }, S).handling).toBe(20);
   });
 });
 

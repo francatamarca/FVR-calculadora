@@ -20,7 +20,7 @@ describe("base aduanera separada del flete comercial", () => {
   it.each([
     ["aéreo comercial", { ...common, tipo: "avion", subTipo: "comercial" }, 230, 30],
     ["aéreo personal", { ...common, tipo: "avion", subTipo: "personal", fob: 500 }, 230, 30],
-    ["marítimo por kg", { ...common, tipo: "barco", seaMode: "kg" }, 80, 30],
+    ["marítimo por kg", { ...common, tipo: "barco", seaMode: "kg" }, 130, 30],
   ])("%s usa USD 3/kg solo para tributos", (_label, data, commercialFreight, customsFreight) => {
     const r = calculate(data, S);
 

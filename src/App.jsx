@@ -1501,7 +1501,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         <Card icon="🚚" title="Servicios logísticos">
           <Row label="Pick up / Retiro en origen" usd={r.pickup} dolar={dolar} />
           {r.hasHandling && <Row label="Handling" usd={r.handling} dolar={dolar}
-            note={r.handling === 0 ? `No aplica: el peso supera el umbral de ${(d.tipo === "avion" ? s.handlingMaxKg : s.handlingMaxKgSea) ?? 3} kg` : undefined} />}
+            note={r.isAir && r.handling === 0 ? `No aplica: el peso supera el umbral de ${s.handlingMaxKg ?? 3} kg` : undefined} />}
           <Row label="Envío nacional" usd={r.domestic} dolar={dolar} />
           <Row label="Honorarios de Gestión" usd={r.fees} dolar={dolar} hi />
         </Card>
@@ -1985,7 +1985,8 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
             </Card>
             <Card icon="🚚" title="Servicios logísticos">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:16 }}>
-                <SettingField s={s} setS={setS} label="Pick up / Retiro en origen (USD)" k="pickup"/>
+                <SettingField s={s} setS={setS} label="Pick up / Retiro en origen - avión (USD)" k="pickup"/>
+                <SettingField s={s} setS={setS} label="Pick up / Retiro en origen - marítimo (USD)" k="pickupSea"/>
                 <SettingField s={s} setS={setS} label="Envío nacional -barco m³- (USD)" k="domesticSea"/>
               </div>
               <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
@@ -2000,11 +2001,10 @@ const AdminPanel = ({ settings, saveSettings, quotes, updateQuoteStatus, metrics
               <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
                 <p style={{ fontSize:12, color:"#0f3d68", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                  <SettingField s={s} setS={setS} label="Handling (USD)" k="handlingSea"/>
+                  <SettingField s={s} setS={setS} label="Handling fijo (USD)" k="handlingSea"/>
                   <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domesticSeaKg"/>
                 </div>
-                <SettingField s={s} setS={setS} label="Cobrar handling solo si peso real es menor a (kg)" k="handlingMaxKgSea" min={0} step="0.1"/>
-                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso real iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
+                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Se cobra siempre por operación, sin umbral de peso.</p>
               </div>
               <Field label="Tipo de honorarios">
                 <div style={{ display:"flex", gap:12 }}>
@@ -2088,10 +2088,9 @@ const OV_FIELDS = [
   ["airRateEspana", "Aéreo España (USD/kg)"], ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
   ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
   ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
-  ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up (USD)"], ["handling", "Handling avión (USD)"],
+  ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up aéreo (USD)"], ["pickupSea", "Pick up marítimo (USD)"], ["handling", "Handling avión (USD)"],
   ["handlingSea", "Handling marítimo kg (USD)"],
   ["handlingMaxKg", "Umbral handling avión (se cobra si peso < kg)"],
-  ["handlingMaxKgSea", "Umbral handling marítimo (se cobra si peso < kg)"],
   ["domestic", "Envío nac. avión (USD)"],
   ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
   // ── DHL Express (solo esta cotización) ──
@@ -2297,7 +2296,7 @@ const InternoView = ({ settings, saveSettings, dolar, fetchDolar, embedded = fal
                 {r.customsPerUnit != null && <span>Base aduanera ({r.customsPerUnit}/{r.isAir ? "kg" : "m³"}): {USD(r.fleteBase)}</span>}
                 <span>Derecho ({r.effectiveDutyPct}%): {USD(r.duty)}</span><span>IVA: {USD(r.iva)}</span>
                 <span>Tasa est.: {USD(r.stat)}</span><span>Honorarios: {USD(r.fees)}</span>
-                <span>Handling: {USD(r.handling)}{r.hasHandling && r.handling === 0 ? ` (no aplica: peso ≥ ${d.tipo === "avion" ? (s.handlingMaxKg ?? 3) : (s.handlingMaxKgSea ?? 3)} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
+                <span>Handling: {USD(r.handling)}{r.isAir && r.handling === 0 ? ` (no aplica: peso ≥ ${s.handlingMaxKg ?? 3} kg)` : ""}</span><span>Logística total: {USD(r.totalLog)}</span>
               </div>
             )}
             {r.isDhl && (() => { const del = deliveryEstimate(d.cp, s); return (

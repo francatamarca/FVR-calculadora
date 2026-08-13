@@ -4,13 +4,13 @@
    NO cambiar fórmulas sin validar contra los tests de tests/calc.test.js. */
 
 export const DEF = {
-  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 8,
+  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 13,
   airCustomsPerKg: 3, seaCustomsPerKg: 3, seaCustomsPerM3: 50,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
-  pickup: 20, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
-  handlingSea: 15, handlingMaxKgSea: 3, domesticSeaKg: 0,
+  pickup: 20, pickupSea: 0, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
+  handlingSea: 20, domesticSeaKg: 0,
   feeType: "percentage", feePct: 8, feePctSea: 5, feePctKg: 8, feeBase: "fob", feeFixed: 150, feeFixedSea: 150, feeFixedKg: 150,
   // ── DHL Express (China → Argentina, solo comercial) ──
   // dhlActive: modalidad habilitada (interno siempre la ve si está activa).
@@ -197,15 +197,13 @@ export const calculate = (d, s) => {
     ib      = internalTaxes && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
   }
 
-  const pickup     = +s.pickup || 0;
-  // Handling con regla de peso (avión y marítimo por kilo): se cobra el valor
-  // configurado solo si el peso facturable es menor al umbral; si no, queda en 0.
-  // Barco por m³ no tiene handling.
+  const pickup     = isAir ? (+s.pickup || 0) : (+s.pickupSea || 0);
+  // En avión el handling conserva su regla por peso. En marítimo por kilo es
+  // un cargo fijo por operación, sin umbral. Barco por m³ no tiene handling.
   const hasHandling = isAir || seaKg;
   const handlingMaxA = (s.handlingMaxKg    != null && s.handlingMaxKg    !== "" ? +s.handlingMaxKg    : 3);
-  const handlingMaxK = (s.handlingMaxKgSea != null && s.handlingMaxKgSea !== "" ? +s.handlingMaxKgSea : 3);
   const handling   = isAir ? (pFact < handlingMaxA ? (+s.handling || 0) : 0)
-                   : seaKg ? (pFact < handlingMaxK ? (+s.handlingSea || 0) : 0)
+                   : seaKg ? (+s.handlingSea || 0)
                    : 0;
   const domestic   = isAir ? (+s.domestic || 0)
                    : seaKg ? (+s.domesticSeaKg || 0)

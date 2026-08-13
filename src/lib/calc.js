@@ -5,7 +5,7 @@
 
 export const DEF = {
   airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 8,
-  airCustomsPerKg: 3, seaCustomsPerM3: 50,
+  airCustomsPerKg: 3, seaCustomsPerKg: 3, seaCustomsPerM3: 50,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
@@ -162,13 +162,13 @@ export const calculate = (d, s) => {
      segundo solo forma seguro, CIF y tributos y nunca se duplica en el total.
 
      - Aereo (personal y comercial): peso facturable x USD 3/kg.
-     - Maritimo por m3: volumen facturable x USD 50/m3.
-     - Maritimo por kg: conserva su formula historica hasta que se configure
-       una base aduanera especifica para esa modalidad. */
+     - Maritimo por kg: peso facturable x USD 3/kg.
+     - Maritimo por m3: volumen facturable x USD 50/m3. */
   const customsPerUnit = isAir ? (+s.airCustomsPerKg || 0)
+    : seaKg ? (+s.seaCustomsPerKg || 0)
     : seaM3 ? (+s.seaCustomsPerM3 || 0)
     : null;
-  const fleteBase = isAir ? pFact * customsPerUnit
+  const fleteBase = (isAir || seaKg) ? pFact * customsPerUnit
     : seaM3 ? m3Fact * customsPerUnit
     : flete;
 

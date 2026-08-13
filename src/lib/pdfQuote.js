@@ -173,7 +173,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       ["CIF / Valor en aduana", USD(r.cif)],
     ]);
   } else if (r.customsPerUnit != null) {
-    const unidad = r.isAir ? "kg" : "m³";
+    const unidad = r.byWeight ? "kg" : "m³";
     section("BASE ADUANERA (SOLO PARA TRIBUTOS)", [
       [`Flete estimado para base aduanera (USD ${r.customsPerUnit}/${unidad})`, USD(r.fleteBase)],
       [{ content: "Este importe se usa únicamente para estimar seguro, CIF y tributos — NO es un cargo adicional y no se suma al total.", colSpan: 2, styles: { fontSize: 7.2, fontStyle: "italic", textColor: gray, fillColor: [255, 250, 240] } }],

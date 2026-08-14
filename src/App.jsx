@@ -1932,7 +1932,7 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
 
         {tab === "interna" && (
           <div style={{ margin:"-24px -24px 0", borderRadius:16, overflow:"hidden" }}>
-            <InternoView settings={settings} settingsSync={settingsSync} refreshSettings={refreshSettings} dolar={dolar} fetchDolar={fetchDolar} embedded />
+            <InternoView settings={settings} settingsSync={settingsSync} refreshSettings={refreshSettings} saveSettings={saveSettings} dolar={dolar} fetchDolar={fetchDolar} embedded />
           </div>
         )}
 
@@ -2110,17 +2110,39 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
 
 /* ── MODO INTERNO (/interno) ─────────────────────────────────
    Cotizador rápido exclusivo del dueño. Sin datos de cliente, sin
-   guardado automático y sin métricas públicas. Las tarifas provienen
-   únicamente de la configuración central vigente; no admite overrides. */
-const InternoView = ({ settings, settingsSync, refreshSettings, dolar, fetchDolar, embedded = false }) => {
+   guardado automático, sin métricas públicas. Todos los valores
+   comerciales son EDITABLES por cotización (overrides temporales):
+   no hace falta tocar la configuración global para un caso puntual.
+   "Guardar como configuración global" persiste los overrides si se quiere. */
+const OV_FIELDS = [
+  ["duty", "Derecho importación (%)"], ["stat", "Tasa estadística (%)"], ["vat", "IVA (%)"],
+  ["insurance", "Seguro (%)"], ["airRateChina", "Aéreo China (USD/kg)"], ["airRateUSA", "Aéreo USA (USD/kg)"],
+  ["airRateEspana", "Aéreo España (USD/kg)"], ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
+  ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
+  ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
+  ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up aéreo (USD)"], ["pickupSea", "Pick up marítimo (USD)"], ["handling", "Handling avión (USD)"],
+  ["handlingSea", "Handling marítimo kg (USD)"],
+  ["handlingMaxKg", "Umbral handling avión (se cobra si peso < kg)"],
+  ["domestic", "Envío nac. avión (USD)"],
+  ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
+  // ── DHL Express (solo esta cotización) ──
+  ["dhlRateLow", "DHL tarifa 10–29,999 kg (USD/kg)"], ["dhlRateHigh", "DHL tarifa desde 30 kg (USD/kg)"],
+  ["dhlDivisor", "DHL divisor volumétrico"], ["dhlCustomsPerKg", "DHL flete base aduanera (USD/kg)"],
+  ["dhlHandling", "DHL handling (USD)"], ["dhlMinKg", "DHL peso mínimo (kg)"],
+];
+
+const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, dolar, fetchDolar, embedded = false }) => {
   const blank = { producto: "", nombre: "", cantidad: "", fob: "", peso: "", largo: "", ancho: "", alto: "", m3manual: "", bultos: "",
     origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "kg", manualDuty: "", aiDutyRate: null,
     cp: "", dhlCustomsOverride: "" };
   const [d, setD] = useState(blank);
+  const [ov, setOv] = useState({});           // overrides temporales de settings (solo esta cotización)
   const [dolarOv, setDolarOv] = useState(""); // tipo de cambio manual de esta cotización
+  const [showRates, setShowRates] = useState(false);
   const [copied, setCopied] = useState("");
+  const [savedGlobal, setSavedGlobal] = useState(false);
 
-  const s = settings;
+  const s = { ...settings, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== "" && v !== null)) };
   const rate = dolarOv !== "" && +dolarOv > 0 ? +dolarOv : dolar;
   const dd = { ...d, aiDutyRate: d.manualDuty !== "" && !isNaN(+d.manualDuty) ? +d.manualDuty : null, paisOrigen: d.origenSel };
   const r = calculate(dd, s);            // cálculo automático en cada cambio
@@ -2138,32 +2160,26 @@ const InternoView = ({ settings, settingsSync, refreshSettings, dolar, fetchDola
     if (pdfLoading || settingsSync.status !== "synced") return;
     setPdfLoading(true);
     try {
-      const latest = await refreshSettings();
-      const latestResult = calculate(dd, latest);
-      await generatePDF({ ...dd, nombre: d.nombre || "Cotización interna", whatsapp: d.whatsapp || "—" }, latestResult, rate, latest);
+      await generatePDF({ ...dd, nombre: d.nombre || "Cotización interna", whatsapp: d.whatsapp || "—" }, r, rate, s);
     } catch { alert("No se pudo generar el PDF."); }
     setPdfLoading(false);
   };
 
   const doBestPDFs = async () => {
     if (pdfLoading || settingsSync.status !== "synced") return;
-    setPdfLoading(true);
-    let latest;
-    try { latest = await refreshSettings(); }
-    catch { alert("No se pudo confirmar la configuración central."); setPdfLoading(false); return; }
-    const latestModes = compareModes(dd, latest);
-    const cheapestLatest = (keys) => latestModes
+    const cheapest = (keys) => modos
       .filter(m => keys.includes(m.key))
       .reduce((best, m) => !best || m.r.totalGen < best.r.totalGen ? m : best, null);
-    const air = cheapestLatest(["aereo", "dhl"]);
-    const sea = cheapestLatest(["barcoKg", "barcoM3"]);
-    if (!air && !sea) { setPdfLoading(false); return; }
+    const air = cheapest(["aereo", "dhl"]);
+    const sea = cheapest(["barcoKg", "barcoM3"]);
+    if (!air && !sea) return;
+    setPdfLoading(true);
     try {
       for (const [label, mode] of [["Aereo-mas-economico", air], ["Maritimo-mas-economico", sea]]) {
         if (!mode) continue;
         await generatePDF(
           { ...mode.d, nombre: d.nombre || "Cotización interna", whatsapp: d.whatsapp || "—" },
-          mode.r, rate, latest, { filenameLabel: label },
+          mode.r, rate, s, { filenameLabel: label },
         );
       }
     } catch { alert("No se pudieron generar las dos opciones en PDF."); }
@@ -2220,7 +2236,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, dolar, fetchDola
             <input placeholder="TC manual" value={dolarOv} onChange={e => setDolarOv(e.target.value.replace(/[^0-9.]/g, ""))}
               style={{ width: 90, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", fontSize: 12 }} />
             <button onClick={fetchDolar} aria-label="Actualizar dólar" style={{ background: "none", border: "none", color: "#b9cee2", cursor: "pointer", fontSize: 15 }}>↺</button>
-            <button onClick={() => { setD(blank); setDolarOv(""); }}
+            <button onClick={() => { setD(blank); setOv({}); setDolarOv(""); }}
               style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🔄 Reset</button>
             {!embedded && <a href="/" style={{ color: "#94a3b8", fontSize: 12, textDecoration: "none" }}>← Sitio público</a>}
           </div>
@@ -2277,12 +2293,28 @@ const InternoView = ({ settings, settingsSync, refreshSettings, dolar, fetchDola
             </div>
           )}
 
-          <div style={{ marginTop:14, padding:"10px 12px", borderRadius:10, background:settingsSync.status === "synced" ? "#ecfdf5" : "#fef2f2", color:settingsSync.status === "synced" ? "#166534" : "#991b1b", fontSize:11, fontWeight:700 }}>
-            {settingsSync.status === "synced"
-              ? `✓ Configuración central sincronizada · versión ${settingsSync.revision}`
-              : "⚠ Configuración central no disponible. Cotización y PDF bloqueados para evitar tarifas incorrectas."}
-            <button onClick={refreshSettings} style={{ marginLeft:8, border:0, background:"transparent", color:"inherit", fontWeight:800, textDecoration:"underline", cursor:"pointer" }}>Actualizar</button>
-          </div>
+          {/* Tarifas de esta cotización (overrides temporales) */}
+          <button onClick={() => setShowRates(v => !v)}
+            style={{ width: "100%", marginTop: 14, padding: "10px 0", borderRadius: 10, border: "1px dashed #cbd5e1", background: "#f8fafc", color: "#475569", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            {showRates ? "▲ Ocultar tarifas de esta cotización" : `▼ Ajustar tarifas SOLO para esta cotización${Object.keys(ov).filter(k => ov[k] !== "").length ? ` (${Object.keys(ov).filter(k => ov[k] !== "").length} modificadas)` : ""}`}
+          </button>
+          {showRates && (
+            <div style={{ marginTop: 10 }}>
+              <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>Vacío = usa la configuración global. Lo que cargues acá aplica solo a esta simulación.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+                {OV_FIELDS.map(([k, label]) => (
+                  <div key={k}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: 2 }}>{label} <span style={{ color: "#cbd5e1" }}>(global: {settings[k]})</span></label>
+                    <Inp type="number" placeholder={String(settings[k] ?? "")} value={ov[k] ?? ""} onChange={e => setOv(p => ({ ...p, [k]: e.target.value }))} style={{ ...inputMini, padding: "6px 8px", fontSize: 12 }} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={async () => { const merged = { ...settings, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== "").map(([k, v]) => [k, +v])) }; try { await saveSettings(merged); setSavedGlobal(true); setTimeout(() => setSavedGlobal(false), 2000); } catch { alert("No se pudo guardar la configuración global. Los ajustes temporales de esta cotización siguen intactos."); } }}
+                style={{ width: "100%", marginTop: 10, padding: "9px 0", borderRadius: 10, border: "none", background: savedGlobal ? "#22c55e" : "#0b2f52", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                {savedGlobal ? "✓ Guardado" : "💾 Guardar estos valores como configuración global"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Columna resultado */}
@@ -2535,7 +2567,7 @@ export default function App() {
   // ── Modo interno (/interno): cotizador rápido solo para el dueño ──
   if (IS_INTERNO) {
     if (view !== "interno") return <AdminLogin titulo="Cotizador interno FVR" onLogin={() => setView("interno")} onBack={() => { window.location.href = "/"; }} />;
-    return <InternoView settings={settings} settingsSync={settingsSync} refreshSettings={refreshSettings} dolar={dolar} fetchDolar={fetchDolar} />;
+    return <InternoView settings={settings} settingsSync={settingsSync} refreshSettings={refreshSettings} saveSettings={saveSettings} dolar={dolar} fetchDolar={fetchDolar} />;
   }
 
   if (view === "admin-login") return <AdminLogin onLogin={() => { setAdminAuth(true); setView("admin"); }} onBack={() => setView("calc")} />;

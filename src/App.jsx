@@ -3,6 +3,7 @@ import { DEF, calculate, compareModes, packTotals, dhlEligibility } from "./lib/
 import { deliveryEstimate } from "./lib/dhlZones.js";
 import { REMOTE_META } from "./data/dhlRemoteZones.js";
 import { fetchCanonicalSettings, saveCanonicalSettings } from "./lib/settingsRemote.js";
+import { mergeTemporarySettings, resolveInternalDutyRate } from "./lib/internalOverrides.js";
 // Meta de la base arancelaria (archivo chico generado por el pipeline —
 // NO importa la base completa al cliente, solo fecha/fuente)
 import { TARIFF_META } from "./data/tariffMeta.js";
@@ -2142,9 +2143,9 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
   const [copied, setCopied] = useState("");
   const [savedGlobal, setSavedGlobal] = useState(false);
 
-  const s = { ...settings, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== "" && v !== null)) };
+  const s = mergeTemporarySettings(settings, ov);
   const rate = dolarOv !== "" && +dolarOv > 0 ? +dolarOv : dolar;
-  const dd = { ...d, aiDutyRate: d.manualDuty !== "" && !isNaN(+d.manualDuty) ? +d.manualDuty : null, paisOrigen: d.origenSel };
+  const dd = { ...d, aiDutyRate: resolveInternalDutyRate(d.manualDuty, ov), paisOrigen: d.origenSel };
   const r = calculate(dd, s);            // cálculo automático en cada cambio
   const modos = compareModes(dd, s);
   const set = (k, v) => setD(p => ({ ...p, [k]: v }));
@@ -2261,7 +2262,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
             <select value={d.origenSel} onChange={e => { const v = e.target.value; setD(p => ({ ...p, origenSel: v, ...(v !== "China" && p.tipo === "dhl" ? { tipo: "avion" } : {}) })); }} style={{ ...inputMini, cursor: "pointer" }}>
               <option>China</option><option>Estados Unidos (USA)</option><option>España</option><option value="otro">Otro</option>
             </select>
-            <Inp type="number" placeholder="Arancel % (manual)" value={d.manualDuty} onChange={e => set("manualDuty", e.target.value)} style={inputMini} />
+            <Inp type="number" placeholder="Arancel % (manual)" value={d.manualDuty} onChange={e => { const value = e.target.value; set("manualDuty", value); if (value !== "") setOv(p => ({ ...p, duty: "" })); }} style={inputMini} />
             <Inp placeholder="CP entrega (opcional)" value={d.cp} onChange={e => set("cp", e.target.value)} style={inputMini} />
             {d.tipo === "dhl" && (
               <Inp type="number" placeholder="Base aduanera TOTAL (override)" title="Vacío = automático: peso facturable × USD/kg" value={d.dhlCustomsOverride} onChange={e => set("dhlCustomsOverride", e.target.value)} style={inputMini} />
@@ -2305,11 +2306,11 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
                 {OV_FIELDS.map(([k, label]) => (
                   <div key={k}>
                     <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: 2 }}>{label} <span style={{ color: "#cbd5e1" }}>(global: {settings[k]})</span></label>
-                    <Inp type="number" placeholder={String(settings[k] ?? "")} value={ov[k] ?? ""} onChange={e => setOv(p => ({ ...p, [k]: e.target.value }))} style={{ ...inputMini, padding: "6px 8px", fontSize: 12 }} />
+                    <Inp type="number" placeholder={String(settings[k] ?? "")} value={ov[k] ?? ""} onChange={e => { const value = e.target.value; setOv(p => ({ ...p, [k]: value })); if (k === "duty" && value !== "") setD(p => ({ ...p, manualDuty: "" })); }} style={{ ...inputMini, padding: "6px 8px", fontSize: 12 }} />
                   </div>
                 ))}
               </div>
-              <button onClick={async () => { const merged = { ...settings, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => v !== "").map(([k, v]) => [k, +v])) }; try { await saveSettings(merged); setSavedGlobal(true); setTimeout(() => setSavedGlobal(false), 2000); } catch { alert("No se pudo guardar la configuración global. Los ajustes temporales de esta cotización siguen intactos."); } }}
+              <button onClick={async () => { const merged = mergeTemporarySettings(settings, ov); try { await saveSettings(merged); setSavedGlobal(true); setTimeout(() => setSavedGlobal(false), 2000); } catch { alert("No se pudo guardar la configuración global. Los ajustes temporales de esta cotización siguen intactos."); } }}
                 style={{ width: "100%", marginTop: 10, padding: "9px 0", borderRadius: 10, border: "none", background: savedGlobal ? "#22c55e" : "#0b2f52", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                 {savedGlobal ? "✓ Guardado" : "💾 Guardar estos valores como configuración global"}
               </button>

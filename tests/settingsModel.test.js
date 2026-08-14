@@ -7,6 +7,7 @@ describe("validación de configuración central", () => {
     const result = sanitizeSettings({ ...DEF, seaRate: 100, feePctSea: 9 });
     expect(result.seaRate).toBe(100);
     expect(result.feePctSea).toBe(9);
+    expect(result.legal).toBe(DEF.legal);
   });
 
   it("completa claves nuevas con defaults sin aceptar claves extra", () => {
@@ -18,5 +19,9 @@ describe("validación de configuración central", () => {
   it("rechaza tipos o números inválidos", () => {
     expect(sanitizeSettings({ ...DEF, seaRate: "600" })).toBeNull();
     expect(sanitizeSettings({ ...DEF, seaRate: Number.NaN })).toBeNull();
+  });
+
+  it("rechaza textos con caracteres dañados antes de guardarlos", () => {
+    expect(sanitizeSettings({ ...DEF, legal: "clasificaci\uFFFDn arancelaria" })).toBeNull();
   });
 });

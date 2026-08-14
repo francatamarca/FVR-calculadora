@@ -29,7 +29,7 @@ export const sanitizeSettings = (input) => {
     }
 
     if (typeof fallback === "string") {
-      if (typeof value !== "string" || value.length > 4000) return null;
+      if (typeof value !== "string" || value.length > 4000 || value.includes("\uFFFD")) return null;
       clean[key] = value;
       continue;
     }

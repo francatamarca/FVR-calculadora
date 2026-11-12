@@ -31,10 +31,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(src/data/(ncm8|ncmDescriptions|tariffMeta)\.js|data/tariff-base\.json|data/tariff-history/CHANGELOG\.md)$'
+          allowed='^(src/data/(ncm8|ncmDescriptions|ncmSpecifics|tariffMeta)\.js|data/tariff-base\.json|data/tariff-history/CHANGELOG\.md)$'
           unexpected=$(git diff --name-only | grep -Ev "$allowed" || true)
           if [ -n "$unexpected" ]; then echo "Cambios fuera de la base: actualización detenida"; exit 1; fi
-          git add -- src/data/ncm8.js src/data/ncmDescriptions.js src/data/tariffMeta.js data/tariff-base.json data/tariff-history/CHANGELOG.md
+          git add -- src/data/ncm8.js src/data/ncmDescriptions.js src/data/ncmSpecifics.js src/data/tariffMeta.js data/tariff-base.json data/tariff-history/CHANGELOG.md
           if git diff --cached --quiet; then echo "Sin cambios de fuente"; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

@@ -34,10 +34,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const URL_ZIP = "https://serviciosweb.afip.gob.ar/aduana/arancelintegrado/archivos/arancel.zip";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
 
-const DESCRIPTION_SCHEMA = 4; // conserva niveles intermedios de la nomenclatura
+const DESCRIPTION_SCHEMA = 5; // conserva niveles intermedios de la nomenclatura
 const OUT_BASE = join(ROOT, "data", "tariff-base.json");
 const OUT_NCM8 = join(ROOT, "src", "data", "ncm8.js");
 const OUT_DESC = join(ROOT, "src", "data", "ncmDescriptions.js");
+const OUT_SPECIFICS = join(ROOT, "src", "data", "ncmSpecifics.js");
 const OUT_META = join(ROOT, "src", "data", "tariffMeta.js");
 const CHANGELOG = join(ROOT, "data", "tariff-history", "CHANGELOG.md");
 
@@ -85,6 +86,7 @@ function parse(zipBuf) {
   const lines = text.split(/\r?\n/);
 
   const singleSim = {}; // la apertura .000 contiene el texto NCM si no hay registro de 8 dígitos
+  const simHierarchy = {}; // aperturas nacionales: vocabulario específico para recuperar NCM
   const hierarchy = {}; // prefijos oficiales de 4 a 8 dígitos
   const leaves = {};           // "61091000" → [12.6, 12.6, ...] DIE de hojas SIM
 
@@ -97,6 +99,7 @@ function parse(zipBuf) {
     const desc = cleanDesc(parts.slice(10).join("@"));
     const dieRate = parseRate(parts[4]);
 
+    if (digits.length > 8 && digits.length <= 11 && desc && !digits.startsWith("00")) simHierarchy[digits] = desc;
     if (digits.length >= 4 && digits.length <= 8 && desc) hierarchy[digits] = desc;
     if (digits.length === 11 && digits.slice(8) === "000" && desc) singleSim[digits.slice(0,8)] = desc;
     if (digits.startsWith("00")) continue; // rancho / provisiones de a bordo — no es NCM
@@ -126,7 +129,14 @@ function parse(zipBuf) {
       ...(isMixed ? { mixed: true, rates: [...new Set(rates)].sort((a, b) => a - b) } : {}),
     };
   }
-  return { base, fileDate, mixed };
+  const specifics = {};
+  for (const [code, desc] of Object.entries(simHierarchy)) {
+    const ncm = code.slice(0,8);
+    if (code.length !== 11 || !base[ncm] || code.endsWith('000')) continue;
+    const path = [...new Set([desc, simHierarchy[code.slice(0,10)], simHierarchy[code.slice(0,9)]].filter(Boolean))].join(' — ');
+    if (!/^(?:(?:los|las) )?dem[aá?]s\.?$/i.test(path)) (specifics[ncm] ||= []).push({code,desc:path});
+  }
+  return { base, fileDate, mixed, specifics };
 }
 
 /* ── 3. SANITY GATES ──────────────────────────────────────── */
@@ -207,7 +217,7 @@ export const TARIFF_META = ${JSON.stringify({
 /* ── MAIN ─────────────────────────────────────────────────── */
 const buf = await download();
 const checksum = createHash("sha256").update(buf).digest("hex");
-const { base, fileDate, mixed } = parse(buf);
+const { base, fileDate, mixed, specifics } = parse(buf);
 const meta = { fileDate, checksum, descriptionSchema:DESCRIPTION_SCHEMA, downloadedAt: new Date().toISOString() };
 const previousMeta = existsSync(OUT_BASE) ? JSON.parse(readFileSync(OUT_BASE, "utf8")).meta : null;
 if (!/^\d{4}-\d{2}-\d{2}$/.test(fileDate) || !Number.isFinite(Date.parse(fileDate)) || fileDate > new Date().toISOString().slice(0,10)) die("Fecha de fuente inválida o futura: se conserva la base.");
@@ -244,7 +254,7 @@ if (DRY) {
 // Backup para restaurar si los tests fallan (los archivos que no existían
 // se BORRAN en el rollback — no pueden quedar huérfanos de una corrida fallida)
 const backups = [], created = [];
-for (const f of [OUT_BASE, OUT_NCM8, OUT_DESC, OUT_META]) {
+for (const f of [OUT_BASE, OUT_NCM8, OUT_DESC, OUT_META, OUT_SPECIFICS]) {
   if (existsSync(f)) { copyFileSync(f, f + ".bak"); backups.push(f); }
   else created.push(f);
 }
@@ -255,6 +265,10 @@ try {
   writeFileSync(OUT_BASE, JSON.stringify({ meta: { ...meta, source: "ARCA arancel.zip" }, positions: base }));
   writeFileSync(OUT_NCM8, genNcm8(base, meta));
   writeFileSync(OUT_DESC, genDesc(base, meta));
+  writeFileSync(OUT_SPECIFICS, `/* GENERADO desde aperturas SIM oficiales ARCA ${fileDate}. Sólo servidor.
+   Vocabulario de búsqueda y validación; no modifica el DIE NCM8. */
+export const NCM_SPECIFICS = ${JSON.stringify(specifics)};
+`);
   writeFileSync(OUT_META, genMeta(meta, { positions: Object.keys(base).length }));
 
   // Gate final: la suite completa tiene que pasar con la base nueva

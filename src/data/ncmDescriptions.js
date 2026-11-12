@@ -10514,6 +10514,6 @@ export const NCM_DESC_META = {
   "date": "2026-11-12",
   "source": "Arancel Integrado ARCA (nomenclador SIM)",
   "positions": 10503,
-  "downloadedAt": "2026-11-12T21:32:50.856Z",
+  "downloadedAt": "2026-11-12T22:03:55.601Z",
   "checksum": "54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8"
 };

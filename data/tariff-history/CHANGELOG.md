@@ -30,3 +30,8 @@
 - Checksum: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8
 
 Nota de revisión del parser: las 96 entradas excluidas en la última regeneración eran encabezados de capítulo 00xx0000, no posiciones NCM de productos eliminadas por ARCA. Sin cambios de DIE en las posiciones reales.
+
+## 2026-11-12 (corrida 2026-11-12T22:03:55.601Z)
+- Posiciones: 10503 (+0 / −0)
+- Aranceles modificados: 0
+- Checksum: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8

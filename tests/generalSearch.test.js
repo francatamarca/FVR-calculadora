@@ -140,3 +140,25 @@ it('la clave se envía sólo en el encabezado del servidor y no en la URL',async
   await classifyPublicProduct('licuadora',{apiKey:'secret-test-only'});
   for(const [url,request]of mock.mock.calls){expect(url).not.toContain('secret-test-only');expect(request.headers['x-goog-api-key']).toBe('secret-test-only');expect(JSON.parse(request.body).tools).toBeUndefined();}
 });
+
+it('las aperturas nacionales conservan la identidad específica sin cambiar el NCM padre',async()=>{
+  const {NCM_SPECIFICS}=await import('../src/data/ncmSpecifics.js');
+  expect(Object.keys(NCM_SPECIFICS).every(isProductCode)).toBe(true);
+  expect(NCM_SPECIFICS['89039300'].some(s=>/jetski|motoski/i.test(s.desc))).toBe(true);
+  expect(NCM_SPECIFICS['70109090'].some(s=>/botellas/i.test(s.desc))).toBe(true);
+});
+it('el validador recibe las aperturas SIM que distinguen un producto del encabezado genérico',async()=>{
+  const mock=semanticFixture('moto de agua','embarcacion','barcos de motor recreo','89039300');vi.stubGlobal('fetch',mock);
+  const result=await classifyPublicProduct('moto de agua',{apiKey:'test'});
+  const ctx=JSON.parse(JSON.parse(mock.mock.calls[1][1].body).contents[0].parts[0].text);
+  const candidate=ctx.candidatos.find(c=>c.ncm==='8903.93.00');
+  expect(candidate.aperturasSIM.some(s=>/jetski|motoski/i.test(s))).toBe(true);
+  expect(result.alternatives[0].hsCode).toBe('8903.93.00');
+});
+it('la recuperación conserva variantes residuales de una familia aunque no repitan el nombre común',async()=>{
+  const mock=semanticFixture('botellas de vidrio','botella','bombonas botellas vidrio','70109090');vi.stubGlobal('fetch',mock);
+  const result=await classifyPublicProduct('botellas de vidrio',{apiKey:'test'});
+  const ctx=JSON.parse(JSON.parse(mock.mock.calls[1][1].body).contents[0].parts[0].text);
+  expect(ctx.candidatos.map(c=>c.ncm)).toEqual(expect.arrayContaining(['7010.90.11','7010.90.21','7010.90.90']));
+  expect(result.alternatives[0].hsCode).toBe('7010.90.90');
+});

@@ -28,7 +28,7 @@ const TOKEN_ALIASES = {
   goma: "caucho", // en comercio AR "goma" = caucho (la nomenclatura usa "caucho")
   polera: "remera", playera: "remera", franela: "remera",
   championes: "zapatilla", tenis: "zapatilla",
-  celu: "celular", compu: "computadora", notebook: "notebook",
+  celu: "celular", compu: "computadora", notebook: "portatil", laptop: "portatil", chair: "asiento", seat: "asiento", wood: "madera", wooden: "madera", bottle: "botella",
   frazada: "manta", polar: "manta",
 };
 

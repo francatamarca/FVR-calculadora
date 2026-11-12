@@ -31,7 +31,7 @@ export function buildIndex(entries) {
     for (const t of tokens) tf.set(t, (tf.get(t) || 0) + 1);
     for (const t of tf.keys()) df.set(t, (df.get(t) || 0) + 1);
     totalLen += tokens.length;
-    docs.push({ code, desc, tf, len: tokens.length });
+    docs.push({ code, desc, path, tf, len: tokens.length });
   }
 
   const N = docs.length || 1;
@@ -57,11 +57,15 @@ export function buildIndex(entries) {
 
   return {
     size: N,
-    search(query, limit = 15) {
+    search(query, limit = 15, { anchor, prefixes = [] } = {}) {
       const qTokens = [...new Set(tokenize(query).map(expandToken).filter(Boolean))];
       if (!qTokens.length) return [];
+      const anchorToken = anchor ? expandToken(tokenize(anchor)[0]) : null;
+      if (anchor && !anchorToken) return [];
       const scored = [];
       for (const d of docs) {
+        if (prefixes.length && !prefixes.some(p => d.code.startsWith(p))) continue;
+        if (anchorToken && !d.tf.has(anchorToken)) continue;
         let score = 0, matched = 0;
         for (const t of qTokens) {
           const f = d.tf.get(t);
@@ -69,7 +73,7 @@ export function buildIndex(entries) {
           matched++;
           score += idf(t) * (f * (K1 + 1)) / (f + K1 * (1 - B + B * d.len / avgLen));
         }
-        if (score > 0) scored.push({ code: d.code, desc: d.desc, score, matched, of: qTokens.length });
+        if (score > 0) scored.push({ code: d.code, desc: d.desc, path:d.path, score, matched, of: qTokens.length });
       }
       scored.sort((a, b) => b.score - a.score);
       return scored.slice(0, limit);

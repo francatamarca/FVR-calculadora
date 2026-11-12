@@ -14,10 +14,10 @@ describe("buscador único por API",()=>{
     const byCode=await call("hsCode",code);expect(result.dutyRate).toBe(byCode.dutyRate);
     expect(result.baseDate).toBe(byCode.baseDate);
   });
-  it("herramientas amplias conserva una estimación explícita de familia",async()=>{
+  it("herramientas amplias pide identificar la herramienta antes de asignar un arancel",async()=>{
     vi.stubEnv("ANTHROPIC_API_KEY","");
     const result=await call("product","herramientas");
-    expect(result.precision).toBe("FAMILY_ESTIMATE");expect(result.requiresManualValidation).toBe(true);
+    expect(result.needsConfirmation).toBe(true);expect(result.dutyRate).toBeNull();expect(result.requiresManualValidation).toBe(true);
   });
   it.each(["8499.99.99","8205200000","abcd82052000"])("rechaza %s sin inventar un porcentaje",async(value)=>{
     const result=await call("hsCode",value);expect(result.dutyRate).toBeNull();expect(result.error).toBeTruthy();

@@ -18,3 +18,8 @@
 - Posiciones: 10599 (+0 / −1)
 - Aranceles modificados: 0
 - Checksum: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8
+
+## 2026-11-12 (descripciones completas, revisión de búsqueda)
+- Posiciones: 10599 (+0 / −0). Aranceles modificados: 0.
+- Descripciones: niveles oficiales de 4 a 8 dígitos y apertura única .000 cuando falta el registro NCM8. Esquema 3.
+- Checksum de fuente: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8

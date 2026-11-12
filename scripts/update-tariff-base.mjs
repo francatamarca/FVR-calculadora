@@ -34,6 +34,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const URL_ZIP = "https://serviciosweb.afip.gob.ar/aduana/arancelintegrado/archivos/arancel.zip";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
 
+const DESCRIPTION_SCHEMA = 3; // conserva niveles intermedios de la nomenclatura
 const OUT_BASE = join(ROOT, "data", "tariff-base.json");
 const OUT_NCM8 = join(ROOT, "src", "data", "ncm8.js");
 const OUT_DESC = join(ROOT, "src", "data", "ncmDescriptions.js");
@@ -83,8 +84,8 @@ function parse(zipBuf) {
   const text = entry.getData().toString("latin1");
   const lines = text.split(/\r?\n/);
 
-  const partidaDesc = {};      // "6109" → "T-SHIRTS Y CAMISETAS, DE PUNTO."
-  const ncm8Desc = {};         // "61091000" → descripción del nivel 8 díg
+  const singleSim = {}; // la apertura .000 contiene el texto NCM si no hay registro de 8 dígitos
+  const hierarchy = {}; // prefijos oficiales de 4 a 8 dígitos
   const leaves = {};           // "61091000" → [12.6, 12.6, ...] DIE de hojas SIM
 
   for (const line of lines) {
@@ -96,12 +97,11 @@ function parse(zipBuf) {
     const desc = cleanDesc(parts.slice(10).join("@"));
     const dieRate = parseRate(parts[4]);
 
+    if (digits.length >= 4 && digits.length <= 8 && desc) hierarchy[digits] = desc;
+    if (digits.length === 11 && digits.slice(8) === "000" && desc) singleSim[digits.slice(0,8)] = desc;
     if (digits.startsWith("0000")) continue; // rancho / provisiones de a bordo — no es NCM
 
-    if (digits.length === 4 && pos.includes(".") && pos.length <= 6) {
-      partidaDesc[digits] = desc;                       // "61.09" partida
-    } else if (digits.length === 8) {
-      if (desc) ncm8Desc[digits] = desc;                // "6109.10.00" nivel NCM
+    if (digits.length === 8) {
       if (dieRate !== null) (leaves[digits] ||= []).push(dieRate); // NCM sin apertura SIM
     } else if (digits.length > 8 && dieRate !== null) {
       (leaves[digits.slice(0, 8)] ||= []).push(dieRate); // hoja SIM
@@ -121,7 +121,7 @@ function parse(zipBuf) {
       die: parseFloat(best[0]),
       // Descripción ESPECÍFICA primero (más peso en la búsqueda), encabezado
       // de partida después como contexto — separador " — " (lo parsea getIndex)
-      desc: [ncm8Desc[code8], partidaDesc[code8.slice(0, 4)]].filter(Boolean).join(" — "),
+      desc: [...new Set([8,7,6,5,4].map(n => hierarchy[code8.slice(0,n)] || (n===8 ? singleSim[code8] : null)).filter(Boolean))].join(" — "),
       leaves: rates.length,
       ...(isMixed ? { mixed: true, rates: [...new Set(rates)].sort((a, b) => a - b) } : {}),
     };
@@ -181,7 +181,7 @@ const genDesc = (base, meta) => {
    GENERADO por scripts/update-tariff-base.mjs — NO editar a mano.
    SOLO SERVIDOR (funciones /api/*): el cliente nunca importa este módulo.
    Fuente: nomenclador ARCA ${meta.fileDate} (español, encabezado de partida
-   + descripción de la posición). */
+   + niveles intermedios y descripción de la apertura única SIM). */
 
 export const NCM_DESC = {
 ${entries}
@@ -208,7 +208,7 @@ export const TARIFF_META = ${JSON.stringify({
 const buf = await download();
 const checksum = createHash("sha256").update(buf).digest("hex");
 const { base, fileDate, mixed } = parse(buf);
-const meta = { fileDate, checksum, downloadedAt: new Date().toISOString() };
+const meta = { fileDate, checksum, descriptionSchema:DESCRIPTION_SCHEMA, downloadedAt: new Date().toISOString() };
 const previousMeta = existsSync(OUT_BASE) ? JSON.parse(readFileSync(OUT_BASE, "utf8")).meta : null;
 if (!/^\d{4}-\d{2}-\d{2}$/.test(fileDate) || !Number.isFinite(Date.parse(fileDate)) || fileDate > new Date().toISOString().slice(0,10)) die("Fecha de fuente inválida o futura: se conserva la base.");
 if (previousMeta?.fileDate && fileDate < previousMeta.fileDate) die("La fuente retrocedió de fecha: se conserva la base.");
@@ -220,7 +220,7 @@ let prev = null;
 if (existsSync(OUT_BASE)) {
   try { prev = JSON.parse(readFileSync(OUT_BASE, "utf8")).positions; } catch { /* primera corrida */ }
 }
-if (!FORCE && prev && JSON.parse(readFileSync(OUT_BASE, "utf8")).meta?.checksum === checksum) {
+if (!FORCE && prev && JSON.parse(readFileSync(OUT_BASE, "utf8")).meta?.checksum === checksum && previousMeta?.descriptionSchema === DESCRIPTION_SCHEMA) {
   log("✓ La fuente no cambió desde la última corrida (mismo checksum). Nada para hacer (usar --force para regenerar).");
   process.exit(0);
 }

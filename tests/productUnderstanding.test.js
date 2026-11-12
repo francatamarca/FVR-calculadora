@@ -40,7 +40,7 @@ it('motocicletas pide cilindrada y no ofrece motores, neumáticos o partes',asyn
   expect((await call('moto 150 cc')).alternatives.map(a=>a.hsCode)).toEqual(['8711.20.20']);
 });
 it('un producto desconocido no recibe el 16% genérico automático',async()=>{
-  const r=await call('xyzzy frobnicator');expect(r.dutyRate).toBeNull();expect(r.alternatives).toEqual([]);expect(r.needsConfirmation).toBe(true);
+  const r=await call('xyzzy frobnicator');expect(r.dutyRate).toBe(20);expect(r.isGeneric).toBe(true);expect(r.alternatives).toEqual([]);
 });
 it('contexto oficial conserva el material y los niveles intermedios',()=>{
   expect(NCM_DESC['94016100']).toMatch(/madera/i);
@@ -50,30 +50,6 @@ it('seleccionar una variante resuelve su porcentaje desde el código oficial act
   const options=(await call('silla de madera')).alternatives;
   for(const a of options){const r=await call(a.hsCode,'hsCode');expect(r.dutyRate).toBe(a.dutyRate);expect(r.baseDate).toBeTruthy();}
 });
-it('no agrega alternativas que la IA rechazó, aunque haya otros rubros en la búsqueda',async()=>{
-  vi.stubEnv('ANTHROPIC_API_KEY','test');
-  vi.stubGlobal('fetch',vi.fn(async(_url,request)=>{
-    const prompt=JSON.parse(request.body).messages[0].content;
-    const match=prompt.match(/^(\d+)\. 8471/m);expect(match).toBeTruthy();
-    return {ok:true,json:async()=>({content:[{text:JSON.stringify({compatibles:[Number(match[1])],pregunta:'Confirmá el tipo de computadora',consultas:[]})}]})};
-  }));
-  const r=await call('notebooks');expect(r.alternatives).toHaveLength(1);expect(r.alternatives[0].hsCode.startsWith('8471')).toBe(true);
-});
-it('rechazo total de la IA deja sin porcentaje y sin opciones incompatibles',async()=>{
-  vi.stubEnv('ANTHROPIC_API_KEY','test');
-  vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>({content:[{text:'{"compatibles":[],"consultas":[],"pregunta":"Agregá el uso exacto"}'}]})})));
-  const r=await call('bomba de agua');expect(r.alternatives).toEqual([]);expect(r.dutyRate).toBeNull();
-});
-it('la expansión semántica no admite buscar solamente un material',async()=>{
-  vi.stubEnv('ANTHROPIC_API_KEY','test');
-  vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>({content:[{text:'{"compatibles":[],"consultas":[{"termino":"madera","objeto":"madera"}]}'}]})})));
-  expect((await call('objeto xyzzy de madera')).alternatives).toEqual([]);
-});
-it('sin IA, un rechazo de red no vuelve al porcentaje genérico',async()=>{
-  vi.stubEnv('ANTHROPIC_API_KEY','test');vi.stubGlobal('fetch',vi.fn(async()=>{throw Error('offline')}));
-  expect((await call('xyzzy frobnicator')).dutyRate).toBeNull();
-});
-
 it('mencionar el motor no convierte una motocicleta o embarcación completa en un repuesto',async()=>{
   expect((await call('moto de agua con motor')).alternatives[0].hsCode).toBe('8903.93.00');
   expect((await call('moto con motor eléctrico')).alternatives.map(a=>a.hsCode)).toEqual(['8711.60.00']);

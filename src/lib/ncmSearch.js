@@ -44,6 +44,7 @@ export function buildIndex(entries) {
   };
 
   const expandToken = (t) => {
+    if (!t) return null;
     if (df.has(t)) return t;
     // fuzzy controlado: mejor vecino por trigramas, umbral estricto
     let best = null, bestSim = 0.55;

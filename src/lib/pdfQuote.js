@@ -37,7 +37,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
   const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-  const dutySuffix = d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
+  const dutySuffix = d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
   const tipo = r.isDhl ? "DHL Express · Envío Comercial"
     : d.tipo === "avion"
       ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
@@ -240,7 +240,11 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
     cursorY += 4;
   }
 
-  if (d.tariffSourceDate && !d.dutyManual) {
+  if (d.tariffGeneric) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6.8); doc.setTextColor(...gray);
+    doc.text("Derecho genérico FVR: 20%. Sin clasificación NCM confirmada; validar antes de importar.", M, cursorY);
+    cursorY += 4;
+  } else if (d.tariffSourceDate && !d.dutyManual) {
     doc.setFont("helvetica", "normal"); doc.setFontSize(6.8); doc.setTextColor(...gray);
     doc.text(`Clasificación probable. Base DIE ARCA del ${d.tariffSourceDate.split("-").reverse().join("/")}. Confirmar NCM y apertura SIM.`, M, cursorY);
     cursorY += 4;

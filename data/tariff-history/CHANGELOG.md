@@ -23,3 +23,10 @@
 - Posiciones: 10599 (+0 / −0). Aranceles modificados: 0.
 - Descripciones: niveles oficiales de 4 a 8 dígitos y apertura única .000 cuando falta el registro NCM8. Esquema 3.
 - Checksum de fuente: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8
+
+## 2026-11-12 (corrida 2026-11-12T21:32:50.856Z)
+- Posiciones: 10503 (+0 / −96)
+- Aranceles modificados: 0
+- Checksum: 54dd73245aad3b762c629fa27c1e32e4dbde805972494174407218162732fed8
+
+Nota de revisión del parser: las 96 entradas excluidas en la última regeneración eran encabezados de capítulo 00xx0000, no posiciones NCM de productos eliminadas por ARCA. Sin cambios de DIE en las posiciones reales.

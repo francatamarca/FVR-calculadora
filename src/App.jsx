@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { DEF, calculate, compareModes, packTotals, dhlEligibility } from "./lib/calc.js";
 import { deliveryEstimate, normalizeCP } from "./lib/dhlZones.js";
 import { loadClientProfile, saveClientProfile } from "./lib/clientProfile.js";
+import { GENERIC_DUTY_RATE, genericEstimate, classificationPatch } from "./lib/searchPolicy.js";
 import { publicQuote, publicModes, originAllowed } from "./lib/publicQuote.js";
 import { REMOTE_META } from "./data/dhlRemoteZones.js";
 import { fetchCanonicalSettings, saveCanonicalSettings } from "./lib/settingsRemote.js";
@@ -85,8 +86,8 @@ const buildWAMsg = (d, r, rate, s) => {
     "Seguro (" + s.insurance + "%): " + USD(r.seguro),
     "CIF / Valor en aduana: " + USD(r.cif),
     r.isPersonal
-      ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty))
-      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
+      ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.tariffGeneric ? " - genérico FVR" : d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty))
+      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.tariffGeneric ? " - genérico FVR" : d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
     r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
     r.isPersonal ? ("IVA (" + s.vat + "% s/CIF + derechos): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
     ...(r.internalTaxes && !r.isPersonal
@@ -161,7 +162,7 @@ const buildShortSummary = (d, r, rate, s = {}) => {
 };
 
 /* ── PDF REAL (vectorial, jsPDF) ─────────────────────────── */
-const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
+const dutySuffix = (d) => d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
 
 const generatePDF = async (d, r, dolar, s, opts = {}) => {
   // Layout en src/lib/pdfQuote.js (renderizable también desde Node para revisarlo)
@@ -361,22 +362,23 @@ const SeaModeSel = ({ value, onChange }) => (
 );
 
 /* ── AI ANALYSIS ─────────────────────────────────────────── */
-const callAnalyzeAPI = async (type, value) => {
+const callAnalyzeAPI = async (type, value, signal) => {
   // cache-buster + no-store para evitar respuestas arancelarias cacheadas
-  const res = await fetch(`/api/analyze?t=${encodeURIComponent(value)}`, {
+  const res = await fetch("/api/analyze", {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
     body: JSON.stringify({ type, value }),
   });
-  if (!res.ok) throw new Error("API error");
+  if (!res.ok) { const error=await res.json().catch(()=>({})); throw new Error(error.error || "No se pudo completar la búsqueda"); }
   const data = await res.json();
   const text = data.content?.[0]?.text || "{}";
   return JSON.parse(text.replace(/```json|```/g, "").trim());
 };
 
-const analyzeProduct = (producto) => callAnalyzeAPI("product", producto);
-const analyzeHsCode  = (hsCode)   => callAnalyzeAPI("hsCode",  hsCode);
+const analyzeProduct = (producto,signal) => callAnalyzeAPI("product", producto,signal);
+const analyzeHsCode  = (hsCode,signal) => callAnalyzeAPI("hsCode",  hsCode,signal);
 
 /* ── MARCA FVR ───────────────────────────────────────────────
    Colores tomados del logo: naranja (carrito/tipografía), azul
@@ -407,15 +409,18 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const [aiResult, setAiResult]   = useState(null);
   const [altOpen, setAltOpen]     = useState(false); // "Ver alternativas" del clasificador
   const analysisRequest = useRef(0);
+  const searchAbort = useRef(null);
+  useEffect(()=>()=>searchAbort.current?.abort(),[]);
   const productSection = useRef(null);
   const [submitting, setSubmitting] = useState(false);
   const set = (k, v) => {
     if (!touched) { onTrackStarted(); setTouched(true); }
     if (k === "producto" || k === "hsCode") {
+      searchAbort.current?.abort();
       analysisRequest.current++;
       setAiLoading(null); setAiResult(null);
       setForm(f => ({ ...f, [k]:v, aiDutyRate:null, aiSuggestion:"", aiTelemetry:null, tariffSource:null, tariffSourceDate:null,
-        categoria:"", manualDuty:"", dutyManual:false, ...(k === "producto" ? {hsCode:""} : {}) }));
+        categoria:"", manualDuty:"", dutyManual:false,tariffGeneric:false, ...(k === "producto" ? {hsCode:""} : {}) }));
     } else setForm(f => ({ ...f, [k]:v }));
   };
   const handleOrigen = (sel) => {
@@ -432,7 +437,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       setForm(f => ({ ...f, manualDuty:"", dutyManual:false, aiDutyRate: f.categoria ? f.aiDutyRate : null }));
     } else {
       analysisRequest.current++; setAiLoading(null); setAiResult(null);
-      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", tariffSource:"Ingresado por el usuario", tariffSourceDate:null, aiSuggestion: `Arancel ingresado manualmente: ${v}%`,
+      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"",tariffGeneric:false, tariffSource:"Ingresado por el usuario", tariffSourceDate:null, aiSuggestion: `Arancel ingresado manualmente: ${v}%`,
         // telemetría: el cliente pisó el resultado del clasificador con un % manual
         aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: `manual:${v}%` } : f.aiTelemetry }));
     }
@@ -453,7 +458,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       const result = await analyzeHsCode(alt.hsCode);
       if (request !== analysisRequest.current || !Number.isFinite(result.dutyRate)) return;
       setAiResult({...result,description:alt.description || result.description,alternatives:aiResult?.alternatives || [],needsConfirmation:false});
-      setForm(f => ({...f,hsCode:result.hsCode,aiDutyRate:result.dutyRate,manualDuty:"",dutyManual:false,categoria:"",
+      setForm(f => ({...f,hsCode:result.hsCode,aiDutyRate:result.dutyRate,tariffGeneric:false,manualDuty:"",dutyManual:false,categoria:"",
         tariffSource:result.source,tariffSourceDate:result.baseDate || result.sourceDate,
         aiSuggestion:`${alt.description || result.description} — Derecho estimado: ${result.dutyRate}% (variante confirmada)`,
         aiTelemetry:{...f.aiTelemetry,corrected:true,correctedTo:alt.hsCode}}));
@@ -465,9 +470,12 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     const value = overrideValue || (type === "product" ? form.producto : form.hsCode);
     if (!value.trim() || aiLoading) return null;
     const request = ++analysisRequest.current;
+    searchAbort.current?.abort();
+    const controller=new AbortController(); searchAbort.current=controller;
+    const timer=setTimeout(()=>controller.abort(),35000);
     setAiLoading(type === "product" ? "product" : "hs"); setAltOpen(false);
     try {
-      const result = await (type === "product" ? analyzeProduct(value) : analyzeHsCode(value));
+      const result = await (type === "product" ? analyzeProduct(value,controller.signal) : analyzeHsCode(value,controller.signal));
       if (request !== analysisRequest.current) return null;
       if (result.needsConfirmation) {
         setAiResult(result); setAltOpen(true);
@@ -476,21 +484,18 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       }
       if (!Number.isFinite(result.dutyRate)) throw new Error(result.error || "Sin arancel verificable");
       setAiResult(result);
-      const patch = {
-        categoria:"", manualDuty:"", dutyManual:false,
-        hsCode: /FAMILY|GENERIC|CHAPTER/.test(result.precision || "") ? "" : (result.hsCode || ""),
-        aiDutyRate:result.dutyRate,
-        aiSuggestion:`${result.description} — Derecho estimado: ${result.dutyRate}% (${result.confidence})`,
-        tariffSource:result.source, tariffSourceDate:result.baseDate || result.sourceDate,
-        aiTelemetry:{ query:value.slice(0,120), method:result.method, chosen:result.hsCode, baseDate:result.baseDate || result.sourceDate,
-          confidence:result.confidence, precision:result.precision, source:result.source, ts:Date.now(), corrected:false },
-      };
+      const patch = classificationPatch(result,value);
       setForm(f => ({ ...f, ...patch }));
       return { ...form, ...(overrideValue ? {producto:overrideValue} : {}), ...patch };
-    } catch {
-      if (request === analysisRequest.current) setAiResult({ error:true });
+    } catch(error) {
+      if (request === analysisRequest.current) setAiResult({ error:true, message:error.name==="AbortError" ? "La búsqueda demoró más de lo esperado. Podés reintentar o continuar con la estimación genérica." : error.message });
       return null;
-    } finally { if (request === analysisRequest.current) setAiLoading(null); }
+    } finally { clearTimeout(timer); if (request === analysisRequest.current) setAiLoading(null); }
+  };
+  const useGenericEstimate = () => {
+    searchAbort.current?.abort();analysisRequest.current++;setAiLoading(null);
+    const result=genericEstimate("chosen-by-customer",TARIFF_META.baseDate);
+    setAiResult(result);setAltOpen(false);setForm(f=>({...f,...classificationPatch(result,f.producto)}));
   };
   const handleAnalyzeProduct = () => analyze("product");
   const handleAnalyzeHsCode = () => analyze("hs");
@@ -810,28 +815,29 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
         <div ref={productSection} style={{scrollMarginTop:20}}><Card icon="📦" title="3 · Datos del producto">
           <Field label="Producto" required>
-            <div style={{ display:"flex", gap:8 }}>
-              <Inp placeholder="Descripción del producto" value={form.producto}
-                onChange={e => set("producto", e.target.value)} style={{ flex:1, minWidth:0 }} />
+            <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+              <Inp placeholder="Ej: mesa de metal para comedor" value={form.producto}
+                onChange={e => set("producto", e.target.value)} maxLength={300} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleAnalyzeProduct();}}} style={{ flex:"1 1 300px", minWidth:0 }} />
               <button onClick={handleAnalyzeProduct} disabled={!!aiLoading || submitting || !form.producto.trim()} aria-label="Buscar clasificación del producto"
-                style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#e2e8f0" : "linear-gradient(135deg,#0f3d68,#18548a)",
+                aria-busy={aiLoading === "product"} style={{ flex:"1 1 155px",minHeight:46,display:"flex",alignItems:"center",justifyContent:"center",gap:9,padding:"12px 15px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#edf3f8" : "linear-gradient(135deg,#0f3d68,#18548a)",
                   color: aiLoading === "product" ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading === "product" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
-                {aiLoading === "product" ? "⏳ Analizando…" : "Buscar arancel"}
+                <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>{aiLoading === "product" ? "Buscando tu producto…" : "Buscar arancel"}
               </button>
             </div>
             {errors.producto && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.producto}</p>}
           </Field>
 
           <p style={{ fontSize:12, color:"#64748b", lineHeight:1.6, marginBottom:16 }}>
-            Describí qué es, para qué sirve y de qué material está hecho. Usamos una sola búsqueda para sugerir su clasificación y arancel. También se analiza al calcular.
+            Escribí qué producto es, para qué se usa y de qué material está hecho. Buscamos opciones para que confirmes cuál corresponde al tuyo.
           </p>
+          {aiLoading === "product" && <div role="status" style={{padding:"12px 14px",borderRadius:10,background:"#edf4fa",marginBottom:16,color:"#345b79",fontSize:12,lineHeight:1.6}}><progress aria-label="Búsqueda en curso" style={{width:"100%",height:4,marginBottom:6}} />Estamos interpretando tu descripción y verificando opciones en la base oficial. Puede demorar unos segundos.</div>}
           {aiResult && !aiResult.error && (
-            <div aria-live="polite" style={{background:aiResult.needsConfirmation ? "#f2f7fc" : "#f0f9f5",border:`1px solid ${aiResult.needsConfirmation ? "#c8dced" : "#b7ddcc"}`,borderRadius:14,padding:16,marginBottom:18}}>
-              <p style={{fontSize:10,fontWeight:800,letterSpacing:1.5,textTransform:"uppercase",color:"#18548a",marginBottom:7}}>{aiResult.needsConfirmation ? "Un paso más para identificarlo" : "Variante seleccionada"}</p>
+            <div aria-live="polite" style={{background:aiResult.isGeneric ? "#fff8e9" : aiResult.needsConfirmation ? "#f2f7fc" : "#f0f9f5",border:`1px solid ${aiResult.isGeneric ? "#ebd29b" : aiResult.needsConfirmation ? "#c8dced" : "#b7ddcc"}`,borderRadius:14,padding:16,marginBottom:18}}>
+              <p style={{fontSize:10,fontWeight:800,letterSpacing:1.5,textTransform:"uppercase",color:"#18548a",marginBottom:7}}>{aiResult.isGeneric ? "Estimación genérica FVR" : aiResult.needsConfirmation ? "Encontramos estas opciones" : "Variante seleccionada"}</p>
               <p style={{fontWeight:750,fontSize:14,lineHeight:1.5,color:"#133b5c",marginBottom:10}}>{aiResult.needsConfirmation ? aiResult.question : aiResult.description}</p>
               {!aiResult.needsConfirmation && <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
-                <span style={{fontSize:12,color:"#315c4a"}}>NCM {aiResult.hsCode}</span>
-                <span style={{background:"#dcefe4",padding:"5px 9px",borderRadius:6,color:"#1d6144",fontWeight:800,fontSize:13}}>Derecho estimado: {aiResult.dutyRate}%</span>
+                {!aiResult.isGeneric && <span style={{fontSize:12,color:"#315c4a"}}>NCM {aiResult.hsCode}</span>}
+                <span style={{background:aiResult.isGeneric ? "#f7e9c9" : "#dcefe4",padding:"5px 9px",borderRadius:6,color:aiResult.isGeneric ? "#855b20" : "#1d6144",fontWeight:800,fontSize:13}}>Derecho estimado: {aiResult.dutyRate}%</span>
               </div>}
               {!aiResult.needsConfirmation && aiResult.officialDesc && <details style={{fontSize:11,color:"#526477",lineHeight:1.6,marginBottom:10}}><summary style={{cursor:"pointer"}}>Descripción oficial y alcance</summary>{aiResult.officialDesc}</details>}
               {!!aiResult.alternatives?.length && <>
@@ -840,7 +846,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                   <button key={alt.hsCode || alt.query || i} disabled={!!aiLoading || submitting} onClick={()=>applyAlternative(alt)}
                     style={{display:"flex",gap:10,alignItems:"center",width:"100%",textAlign:"left",padding:"12px",background:"white",border:"1px solid #cadce9",borderRadius:10,cursor:aiLoading?"wait":"pointer",color:"#153c5b",opacity:aiLoading ? .7 : 1}}>
                     <span style={{width:18,height:18,border:"1.5px solid #93aec3",borderRadius:"50%",flexShrink:0,display:"grid",placeItems:"center",fontSize:11}}>{!aiResult.needsConfirmation && aiResult.hsCode===alt.hsCode ? "✓" : ""}</span>
-                    <span style={{flex:1,minWidth:0,fontSize:12,lineHeight:1.55}}>{alt.description}
+                    <span style={{flex:1,minWidth:0,fontSize:12,lineHeight:1.55}}>{alt.description}{alt.detail && <span style={{display:"block",fontSize:11,color:"#61778a",marginTop:3}}>{alt.detail}</span>}
                       {alt.hsCode && <span style={{display:"block",fontSize:10,color:"#718397",marginTop:4}}>NCM {alt.hsCode}</span>}
                     </span>
                     <span style={{fontWeight:800,fontSize:13,color:"#18548a",flexShrink:0}}>{Number.isFinite(alt.dutyRate) ? `${alt.dutyRate}%` : "→"}</span>
@@ -848,16 +854,17 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
                 ))}</div>}
               </>}
               {aiResult.needsConfirmation && <button onClick={()=>{productSection.current?.querySelector("input")?.focus();}} style={{border:0,background:"transparent",padding:"12px 0 4px",fontSize:12,color:"#18548a",fontWeight:700,cursor:"pointer"}}>Mi producto es diferente: agregar detalles ↑</button>}
+              {aiResult.needsConfirmation && <button onClick={useGenericEstimate} style={{border:0,background:"transparent",padding:"8px 0",fontSize:11,color:"#90652c",textAlign:"left",cursor:"pointer"}}>No encuentro mi variante: usar estimación genérica del {GENERIC_DUTY_RATE}%</button>}
               <div style={{borderTop:"1px solid #dce6ed",paddingTop:10,marginTop:12,fontSize:10.5,color:"#586f80",lineHeight:1.6}}>
-                Arancel Integrado ARCA · Base del {(aiResult.baseDate || aiResult.sourceDate || "").split("-").reverse().join("/")}
-                <br />{aiResult.needsConfirmation ? "Elegí por las características del producto. Cada porcentaje corresponde a su posición oficial; la clasificación es orientativa." : "Derecho extrazona. Confirmar clasificación y requisitos con FVR antes de importar."}
+                {aiResult.isGeneric ? "Valor de respaldo definido por FVR; no es un arancel oficial confirmado." : `Arancel Integrado ARCA · Base del ${(aiResult.baseDate || aiResult.sourceDate || "").split("-").reverse().join("/")}`}
+                <br />{aiResult.isGeneric ? "Podés continuar la cotización y revisar la clasificación con FVR antes de importar." : aiResult.needsConfirmation ? "Elegí por las características del producto. Cada porcentaje corresponde a su posición oficial; la clasificación es orientativa." : "Derecho extrazona. Confirmar clasificación y requisitos con FVR antes de importar."}
                 {(aiResult.warnings || []).map((w,i)=><p key={i} style={{color:"#90652c",marginTop:4}}>{w}</p>)}
               </div>
             </div>
           )}
           {aiResult?.error && (
             <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:10, marginBottom:16, fontSize:12, color:"#991b1b" }}>
-              No pudimos obtener un arancel. Reintentá o ingresá un código o porcentaje conocido en la sección opcional.
+              {aiResult.message || "No pudimos completar la búsqueda. Reintentá o ingresá un código conocido."}<button onClick={useGenericEstimate} style={{display:"block",marginTop:10,padding:"10px 12px",background:"#fff8e9",border:"1px solid #ebd29b",borderRadius:8,color:"#855b20",cursor:"pointer",fontWeight:750}}>Continuar con estimación genérica del {GENERIC_DUTY_RATE}%</button>
             </div>
           )}
 
@@ -1221,14 +1228,14 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         )}
 
         {d.aiDutyRate !== null && d.aiDutyRate !== undefined && (
-          <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:14, padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
+          <div style={{ background:d.tariffGeneric ? "#fff8e9" : "#f0fdf4", border:`1px solid ${d.tariffGeneric ? "#ebd29b" : "#86efac"}`, borderRadius:14, padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
             <span style={{ fontSize:20 }}>{d.categoria ? "🏷️" : (d.dutyManual ? "✍️" : "🤖")}</span>
             <p style={{ fontSize:12, color:"#166534" }}>
               {d.categoria
                 ? <><strong>Categoría seleccionada:</strong> {d.categoria} — derecho de importación <strong>{d.aiDutyRate}%</strong>. Verificar con despachante.</>
                 : d.dutyManual
                   ? <><strong>Arancel manual:</strong> Derecho de importación cargado por el cliente al <strong>{d.aiDutyRate}%</strong>.</>
-                  : <><strong>Clasificación estimada:</strong> {d.aiSuggestion}<br />{d.tariffSource && <span>Fuente: {d.tariffSource}{d.tariffSourceDate ? ` · Base del ${d.tariffSourceDate.split("-").reverse().join("/")}` : ""}. </span>}Confirmar la posición exacta antes de operar.</>}
+                  : <><strong>{d.tariffGeneric ? "Estimación genérica:" : "Clasificación estimada:"}</strong> {d.aiSuggestion}<br />{d.tariffSource && <span>Fuente: {d.tariffSource}{d.tariffSourceDate ? ` · Base del ${d.tariffSourceDate.split("-").reverse().join("/")}` : ""}. </span>}Confirmar la posición exacta antes de operar.</>}
             </p>
           </div>
         )}

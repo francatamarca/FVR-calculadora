@@ -34,7 +34,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const URL_ZIP = "https://serviciosweb.afip.gob.ar/aduana/arancelintegrado/archivos/arancel.zip";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
 
-const DESCRIPTION_SCHEMA = 3; // conserva niveles intermedios de la nomenclatura
+const DESCRIPTION_SCHEMA = 4; // conserva niveles intermedios de la nomenclatura
 const OUT_BASE = join(ROOT, "data", "tariff-base.json");
 const OUT_NCM8 = join(ROOT, "src", "data", "ncm8.js");
 const OUT_DESC = join(ROOT, "src", "data", "ncmDescriptions.js");
@@ -99,7 +99,7 @@ function parse(zipBuf) {
 
     if (digits.length >= 4 && digits.length <= 8 && desc) hierarchy[digits] = desc;
     if (digits.length === 11 && digits.slice(8) === "000" && desc) singleSim[digits.slice(0,8)] = desc;
-    if (digits.startsWith("0000")) continue; // rancho / provisiones de a bordo — no es NCM
+    if (digits.startsWith("00")) continue; // rancho / provisiones de a bordo — no es NCM
 
     if (digits.length === 8) {
       if (dieRate !== null) (leaves[digits] ||= []).push(dieRate); // NCM sin apertura SIM

@@ -172,3 +172,11 @@ it('dedica razonamiento a la validación de exclusiones sin habilitar herramient
   expect(second.tools).toBeUndefined();
   expect(result.question).toBe('Confirmá si esta variante corresponde a tu producto.');
 });
+
+it('el contexto de una posición residual conserva las ramas específicas excluidas del mismo nivel',async()=>{
+  const mock=semanticFixture('notebook portátil con batería','computadora','maquinas portatiles procesamiento datos','84713019');vi.stubGlobal('fetch',mock);
+  await classifyPublicProduct('notebook portátil con batería',{apiKey:'test'});
+  const ctx=JSON.parse(JSON.parse(mock.mock.calls[1][1].body).contents[0].parts[0].text);
+  const residual=ctx.candidatos.find(c=>c.ncm==='8471.30.90');
+  expect(residual.otrasRamasEspecificas).toEqual(expect.arrayContaining([expect.objectContaining({rama:'8471301',descripcion:expect.stringContaining('sin fuente externa')})]));
+});

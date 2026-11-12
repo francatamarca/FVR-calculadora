@@ -178,5 +178,6 @@ it('el contexto de una posición residual conserva las ramas específicas exclui
   await classifyPublicProduct('notebook portátil con batería',{apiKey:'test'});
   const ctx=JSON.parse(JSON.parse(mock.mock.calls[1][1].body).contents[0].parts[0].text);
   const residual=ctx.candidatos.find(c=>c.ncm==='8471.30.90');
-  expect(residual.otrasRamasEspecificas).toEqual(expect.arrayContaining([expect.objectContaining({rama:'8471301',descripcion:expect.stringContaining('sin fuente externa')})]));
+  expect(residual.otrasRamasEspecificas).toContain('8471301');
+  expect(ctx.ramasOficiales['8471301']).toContain('sin fuente externa');
 });

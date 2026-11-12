@@ -162,3 +162,13 @@ it('la recuperación conserva variantes residuales de una familia aunque no repi
   expect(ctx.candidatos.map(c=>c.ncm)).toEqual(expect.arrayContaining(['7010.90.11','7010.90.21','7010.90.90']));
   expect(result.alternatives[0].hsCode).toBe('7010.90.90');
 });
+
+it('dedica razonamiento a la validación de exclusiones sin habilitar herramientas pagas',async()=>{
+  const mock=semanticFixture('mesa de metal','mueble','muebles metal','94032090');vi.stubGlobal('fetch',mock);
+  const result=await classifyPublicProduct('mesa de metal',{apiKey:'test'});
+  const first=JSON.parse(mock.mock.calls[0][1].body),second=JSON.parse(mock.mock.calls[1][1].body);
+  expect(first.generationConfig.thinkingConfig.thinkingLevel).toBe('LOW');
+  expect(second.generationConfig.thinkingConfig.thinkingLevel).toBe('MEDIUM');
+  expect(second.tools).toBeUndefined();
+  expect(result.question).toBe('Confirmá si esta variante corresponde a tu producto.');
+});

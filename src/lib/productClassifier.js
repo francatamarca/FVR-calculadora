@@ -120,7 +120,14 @@ async function modelStep(stage,schema,system,user,key,model,usage,timeout=stage=
     // No se usa ninguna clave de Anthropic ni existe fallback de pago.
     const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
       method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body)});
-    if(!response.ok)throw new Error(response.status===429?'free-quota-exhausted':`provider-${response.status}`);
+    if(!response.ok) {
+      const failure=new Error(response.status===429?'free-quota-exhausted':`provider-${response.status}`);
+      if(response.status===400) {
+        const payload=await response.json().catch(()=>null);
+        failure.providerHint=String(payload?.error?.message||'').replaceAll(key,'[redacted]').slice(0,400);
+      }
+      throw failure;
+    }
     const data=await response.json(),candidate=data.candidates?.[0];
     usage.inputTokens+=Number(data.usageMetadata?.promptTokenCount)||0;
     usage.outputTokens+=(Number(data.usageMetadata?.candidatesTokenCount)||0)+(Number(data.usageMetadata?.thoughtsTokenCount)||0);usage.calls++;
@@ -129,7 +136,7 @@ async function modelStep(stage,schema,system,user,key,model,usage,timeout=stage=
     const result=JSON.parse(text);
     if(!result||typeof result!=='object'||Array.isArray(result))throw new Error('invalid-model-response');
     return result;
-  } finally {clearTimeout(timer);}
+  } catch(error) {error.searchStage=stage;throw error;} finally {clearTimeout(timer);}
 }
 
 function specificContext(code,searches) {
@@ -209,10 +216,11 @@ export async function classifyPublicProduct(value,{apiKey=process.env.GEMINI_FRE
       return confirmedOptions(value,options.length===1?'Confirmá si esta variante corresponde a tu producto.':typeof validated.pregunta==='string'?validated.pregunta.slice(0,240):'¿Cuál describe tu producto?',alternatives,'semantica-ia-validada',
         {interpretedProduct:plan.nombre,confidence:['alta','media','baja'].includes(validated.confianza)?validated.confianza:'media'});
     } catch(error) {
-      // Ante una falla externa, usar sólo el respaldo local verificado o
-      // el 20% explícito. Nunca devolver candidatos rechazados por la IA.
-      const local=localSearch(value);
-      return {...local,serviceUnavailable:true,fallbackReason:error.message==='free-quota-exhausted'?'free-quota-exhausted':local.isGeneric?'service-unavailable':undefined};
+      // Ante una falla externa, usar el 20% explícito. No presentar
+      // coincidencias léxicas como si hubieran sido validadas por la IA.
+      const reason=/^(?:free-quota-exhausted|provider-\d{3}|context-budget|invalid-model-response)$/.test(error.message)?error.message:error.name==='AbortError'?'provider-timeout':'service-unavailable';
+      console.warn('tariff-search-provider',{reason,stage:error.searchStage||'retrieval',...(error.providerHint?{hint:error.providerHint}:{})});
+      return {...genericEstimate(reason,TARIFF_SOURCE.date),serviceUnavailable:true};
     }
   })();
   const complete=run.then(raw=>apiKey?{...raw,aiModel:model,aiUsage:usage}:raw);

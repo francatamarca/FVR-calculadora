@@ -222,3 +222,10 @@ it('una opción sin validación explícita o con atributos contradictorios no se
     expect(r.alternatives).toEqual([]);expect(r.dutyRate).toBe(20);
   }
 });
+
+it('si falla Gemini, no presenta coincidencias locales como opciones validadas aunque existan',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>({ok:false,status:429})));
+  const result=await classifyPublicProduct('notebook con batería',{apiKey:'test'});
+  expect(result.isGeneric).toBe(true);expect(result.dutyRate).toBe(20);
+  expect(result.alternatives).toEqual([]);expect(result.warnings.join(' ')).toContain('límite gratuito');
+});

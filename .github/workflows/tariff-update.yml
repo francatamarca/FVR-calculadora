@@ -1,41 +1,42 @@
-# Actualización automática de la base arancelaria (DIE ARCA)
-# - Corre todos los días a las 07:00 AR (10:00 UTC) y a demanda.
-# - Descarga el arancel.zip oficial, regenera la base y corre los tests.
-# - Si hay cambios, abre un PULL REQUEST: nunca publica solo — Francisco
-#   revisa el diff y mergea (el merge dispara el deploy de Vercel).
-# - Si la fuente falla o los datos son inconsistentes, el script sale con
-#   error, no se toca nada y el run queda en rojo como alerta.
+# Consulta diaria de la fuente oficial. Sólo publica datos validados.
+# Autorizado por Francisco el 12/11/2026: diario a las 07:17 de Argentina (10:17 UTC).
 name: tariff-update
-
 on:
   schedule:
-    - cron: "0 10 * * *"
+    - cron: "17 10 * * *"
   workflow_dispatch: {}
-
 permissions:
   contents: write
-  pull-requests: write
-
+concurrency:
+  group: tariff-update
+  cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci
-      - name: Actualizar base arancelaria desde ARCA
+      - name: Consultar y validar ARCA
         run: node scripts/update-tariff-base.mjs
-      - name: Abrir PR si hay cambios
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "Base arancelaria: actualización automática desde ARCA"
-          title: "📊 Actualización de base arancelaria (DIE ARCA)"
-          body: |
-            Actualización automática desde el Arancel Integrado de ARCA.
-            - Ver `data/tariff-history/CHANGELOG.md` para el resumen del diff.
-            - Tests corridos en el pipeline antes de generar este PR (35+ verdes).
-            - Revisar y mergear para publicar (el merge despliega en Vercel).
-          branch: tariff-update
-          delete-branch: true
+      - name: Comprobar aplicación
+        run: npm run build
+      - name: Publicar únicamente la base validada
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(src/data/(ncm8|ncmDescriptions|tariffMeta)\.js|data/tariff-base\.json|data/tariff-history/CHANGELOG\.md)$'
+          unexpected=$(git diff --name-only | grep -Ev "$allowed" || true)
+          if [ -n "$unexpected" ]; then echo "Cambios fuera de la base: actualización detenida"; exit 1; fi
+          git add -- src/data/ncm8.js src/data/ncmDescriptions.js src/data/tariffMeta.js data/tariff-base.json data/tariff-history/CHANGELOG.md
+          if git diff --cached --quiet; then echo "Sin cambios de fuente"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Actualizar base oficial ARCA validada'
+          git push origin HEAD:main

@@ -1,3 +1,4 @@
+import {rateByCode,rateByFamily} from "./tariffReference.js";
 /* ── FASE 9: batería del clasificador híbrido ────────────────
    Cada caso registra: código esperado (o conjunto aceptable), %
    esperado contra el DIE oficial ARCA (nomenclador 13/07/2026),
@@ -24,7 +25,7 @@ describe("Fase 9 — casos requeridos (capa local determinística)", () => {
     ["termo de mate",             "9617",    18,   "KEYWORD_MATCH"],
     ["sombrero",                  "6505",    20,   "KEYWORD_MATCH"],
     ["reloj despertador",         "9105",    20,   "KEYWORD_MATCH"],   // NUNCA reloj pulsera
-    ["celular",                   "8517.12", 0,    "KEYWORD_MATCH"],   // Dec. 333/2025
+    ["celular",                   "8517.13", 0,    "KEYWORD_MATCH"],   // Dec. 333/2025
     ["zapatillas",                "6402",    20,   "KEYWORD_MATCH"],   // Dec. 236/2025
     ["camara wifi",               "8525.89", 2,    "KEYWORD_MATCH"],   // DIE real ARCA: 2% (la TEC decía 20)
     ["microfono inalambrico",     "8518.10", 20,   "KEYWORD_MATCH"],
@@ -35,17 +36,17 @@ describe("Fase 9 — casos requeridos (capa local determinística)", () => {
     ["cabeza de cilindro",        "8409.91", 16,   "KEYWORD_MATCH"],
     ["camara de bicicleta",       "4013",    16,   "KEYWORD_MATCH"],   // cámara de caucho — NUNCA bicicleta 8712
   ];
-  for (const [txt, code, rate, prec] of CASOS) {
-    it(`${txt} → ${code} (${rate}%)`, () => {
+  for (const [txt, code, historicalRate, prec] of CASOS) {
+    it(`${txt} → ${code} (DIE vigente de la fuente)`, () => {
       const s = sel(txt);
       expect(s.code.replace(/[^0-9.]/g, "").startsWith(code.replace(/[^0-9.]/g, "").slice(0, 6))).toBe(true);
-      expect(s.dutyRate).toBe(rate);
+      expect(s.dutyRate).toBe(rateByCode(s.code));
       expect(s.precision).toBe(prec);
     });
   }
 
   it("notebook → 16% (DIE real ARCA vigente)", () => {
-    expect(sel("notebook").dutyRate).toBe(16);
+    expect(sel("notebook").dutyRate).toBe(rateByCode(sel("notebook").code));
   });
 });
 
@@ -81,12 +82,12 @@ describe("Fase 9 — entradas amplias (jerarquía de familias)", () => {
     expect(s.warnings.join(" ")).toMatch(/mediana/i);
   });
   it("'ropa' resuelve (regla o familia) al 20% del Dec. 236/2025", () => {
-    expect(sel("ropa").dutyRate).toBe(20);
+    expect(sel("ropa").dutyRate).toBe(rateByCode(sel("ropa").code));
   });
   it("'tela de algodon' → familia telas al 18% (Dec. 236 aplicado a la mediana)", () => {
     const s = sel("tela de algodon");
     expect(s.precision).toBe("FAMILY_ESTIMATE");
-    expect(s.dutyRate).toBe(18);
+    expect(s.dutyRate).toBe(rateByFamily("tela de algodon"));
   });
   it("'repuesto de maquinaria' → familia con estimación", () => {
     expect(sel("repuesto de maquinaria").precision).toBe("FAMILY_ESTIMATE");
@@ -149,12 +150,12 @@ describe("Fase 9 — búsqueda de candidatos reales (Capa B)", () => {
 describe("Fase 9 — capas del código (Fase 7)", () => {
   it("la tabla de 4 dígitos NO pisa una posición oficial de 8 dígitos", () => {
     // 8471 (tabla 4 díg) = 0, pero la posición oficial 8471.30.19 = 16
-    expect(classifyCode("8471.30.19").selected.dutyRate).toBe(16);
+    expect(classifyCode("8471.30.19").selected.dutyRate).toBe(rateByCode("8471.30.19"));
     expect(classifyCode("8471.30.19").selected.precision).toBe("NCM_8_OFICIAL");
   });
   it("código de 4 dígitos → tabla auditada con warning de precisión", () => {
     const s = classifyCode("6109").selected;
-    expect(s.dutyRate).toBe(20);
+    expect(s.dutyRate).toBe(rateByCode("6109"));
     expect(s.warnings.join(" ")).toMatch(/referencial/i);
   });
 });

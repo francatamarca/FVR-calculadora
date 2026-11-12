@@ -1,6 +1,8 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { DEF, calculate, compareModes, packTotals, dhlEligibility } from "./lib/calc.js";
-import { deliveryEstimate } from "./lib/dhlZones.js";
+import { deliveryEstimate, normalizeCP } from "./lib/dhlZones.js";
+import { loadClientProfile, saveClientProfile } from "./lib/clientProfile.js";
+import { publicQuote, publicModes, originAllowed } from "./lib/publicQuote.js";
 import { REMOTE_META } from "./data/dhlRemoteZones.js";
 import { fetchCanonicalSettings, saveCanonicalSettings } from "./lib/settingsRemote.js";
 import { mergeTemporarySettings, resolveInternalDutyRate } from "./lib/internalOverrides.js";
@@ -13,139 +15,6 @@ const AdminCharts = lazy(() => import("./AdminCharts.jsx"));
 
 const ADMIN_PASS = "fvr2024";
 const WA_NUM = "5493883372745";
-
-/* ── CATEGORÍAS DE PRODUCTO → % DERECHO DE IMPORTACIÓN ──────
-   Valores REFERENCIALES según el Nomenclador Común del MERCOSUR (NCM/AEC),
-   alineados con la misma tabla que usa la IA. Confirmar el arancel exacto
-   por código en VUCE (vuce.gob.ar) o con despachante.
-   Si el producto no está en la lista, se deja en blanco y se usa IA / HS Code. */
-const CATEGORIES = [
-  // Airsoft y aire comprimido (cap. 93 — 20%)
-  { label: "Airsoft / réplicas de armas", rate: 20 },
-  { label: "Armas de aire comprimido (rifles, pistolas)", rate: 20 },
-  { label: "Balines y munición airsoft", rate: 20 },
-  // Electrónica, informática y telecom (mayoría 0% por régimen BIT)
-  { label: "Teléfonos celulares / smartphones", rate: 0 },
-  { label: "Tablets", rate: 0 },
-  { label: "Computadoras portátiles / notebooks", rate: 0 },
-  { label: "Computadoras de escritorio", rate: 0 },
-  { label: "Monitores para PC", rate: 16 },
-  { label: "Teclados", rate: 0 },
-  { label: "Mouse", rate: 0 },
-  { label: "Pendrives y discos externos", rate: 0 },
-  { label: "Componentes de PC (placa, GPU, CPU)", rate: 0 },
-  { label: "Impresoras y escáneres", rate: 14 },
-  { label: "Routers y módems", rate: 0 },
-  { label: "Smartwatch / relojes inteligentes", rate: 0 },
-  { label: "Consolas de videojuegos", rate: 20 },
-  { label: "Videojuegos", rate: 20 },
-  { label: "Cámaras fotográficas", rate: 18 },
-  { label: "Cámaras de video / GoPro", rate: 18 },
-  { label: "Drones", rate: 0 },
-  { label: "Proyectores", rate: 16 },
-  { label: "Powerbank / baterías portátiles", rate: 14 },
-  { label: "Cargadores y adaptadores", rate: 14 },
-  { label: "Cables (USB, HDMI)", rate: 12 },
-  { label: "Auriculares", rate: 20 },
-  { label: "Parlantes y altavoces", rate: 20 },
-  { label: "Micrófonos", rate: 20 },
-  { label: "Televisores", rate: 16 },
-  // Electrodomésticos (20%)
-  { label: "Heladeras y freezers", rate: 20 },
-  { label: "Lavarropas", rate: 20 },
-  { label: "Microondas", rate: 20 },
-  { label: "Aspiradoras", rate: 20 },
-  { label: "Licuadoras y procesadoras", rate: 20 },
-  { label: "Planchas", rate: 20 },
-  { label: "Ventiladores", rate: 20 },
-  { label: "Aire acondicionado", rate: 20 },
-  { label: "Secadores de pelo", rate: 20 },
-  { label: "Afeitadoras y depiladoras", rate: 20 },
-  { label: "Cafeteras", rate: 20 },
-  { label: "Tostadoras y sandwicheras", rate: 20 },
-  // Ropa y calzado (20% — Dec. 236/2025)
-  { label: "Ropa casual", rate: 20 },
-  { label: "Ropa deportiva", rate: 20 },
-  { label: "Ropa interior", rate: 20 },
-  { label: "Ropa de bebé", rate: 20 },
-  { label: "Medias", rate: 20 },
-  { label: "Guantes", rate: 20 },
-  { label: "Bufandas y pañuelos", rate: 20 },
-  { label: "Corbatas", rate: 20 },
-  { label: "Trajes de baño y mallas", rate: 20 },
-  { label: "Calzado deportivo / zapatillas", rate: 20 },
-  { label: "Calzado casual", rate: 20 },
-  { label: "Botas", rate: 20 },
-  { label: "Sandalias y ojotas", rate: 20 },
-  { label: "Sombreros y gorras", rate: 20 },
-  // Textil hogar
-  { label: "Telas y tejidos", rate: 18 },
-  { label: "Ropa de cama y sábanas", rate: 20 },
-  { label: "Toallas", rate: 20 },
-  { label: "Cortinas", rate: 20 },
-  { label: "Alfombras", rate: 20 },
-  { label: "Mantas y frazadas", rate: 20 },
-  // Marroquinería y accesorios (18%)
-  { label: "Carteras y bolsos", rate: 18 },
-  { label: "Mochilas", rate: 18 },
-  { label: "Billeteras", rate: 18 },
-  { label: "Cinturones", rate: 18 },
-  { label: "Maletas y equipaje", rate: 18 },
-  { label: "Relojes de pulsera", rate: 20 },
-  { label: "Gafas de sol", rate: 18 },
-  { label: "Anteojos de vista", rate: 18 },
-  { label: "Joyas (oro y plata)", rate: 18 },
-  { label: "Bijouterie y fantasía", rate: 18 },
-  // Cosmética y perfumería (18%)
-  { label: "Perfumes", rate: 18 },
-  { label: "Maquillaje y cosméticos", rate: 18 },
-  { label: "Cremas faciales y corporales", rate: 18 },
-  { label: "Productos para el cabello / shampoo", rate: 18 },
-  { label: "Desodorantes", rate: 18 },
-  // Hogar y muebles (18%)
-  { label: "Muebles", rate: 18 },
-  { label: "Sillas y sillones", rate: 18 },
-  { label: "Mesas y escritorios", rate: 18 },
-  { label: "Colchones", rate: 18 },
-  { label: "Lámparas y luminarias", rate: 18 },
-  { label: "Vajilla", rate: 18 },
-  { label: "Utensilios de cocina", rate: 18 },
-  { label: "Ollas y sartenes", rate: 18 },
-  { label: "Decoración del hogar", rate: 18 },
-  // Deportes y aire libre
-  { label: "Bicicletas", rate: 20 },
-  { label: "Equipamiento de gimnasio", rate: 20 },
-  { label: "Pelotas y artículos deportivos", rate: 20 },
-  { label: "Camping y carpas", rate: 20 },
-  // Juguetes (20%)
-  { label: "Juguetes", rate: 20 },
-  { label: "Muñecas y peluches", rate: 20 },
-  { label: "Juegos de mesa y puzzles", rate: 20 },
-  // Herramientas (12%)
-  { label: "Herramientas manuales", rate: 12 },
-  { label: "Herramientas eléctricas", rate: 12 },
-  // Instrumentos musicales (16%)
-  { label: "Guitarras e instrumentos de cuerda", rate: 16 },
-  { label: "Teclados musicales y sintetizadores", rate: 16 },
-  // Salud
-  { label: "Suplementos y proteínas", rate: 20 },
-  { label: "Material médico", rate: 6 },
-  { label: "Productos ortopédicos", rate: 0 },
-  { label: "Lentes de contacto", rate: 10 },
-  // Bebés
-  { label: "Cochecitos y sillas de bebé", rate: 20 },
-  // Papelería
-  { label: "Libros", rate: 0 },
-  { label: "Cuadernos y agendas", rate: 16 },
-  { label: "Material de oficina", rate: 18 },
-  // Mascotas
-  { label: "Alimento para mascotas", rate: 10 },
-  { label: "Accesorios para mascotas", rate: 18 },
-  // Automotor y motos
-  { label: "Autopartes y accesorios", rate: 18 },
-  { label: "Cascos y accesorios de moto", rate: 18 },
-  { label: "Neumáticos", rate: 14 },
-];
 
 const fmt  = (v, d = 2) => Number(v || 0).toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const USD  = (v) => `USD ${fmt(v)}`;
@@ -292,13 +161,14 @@ const buildShortSummary = (d, r, rate, s = {}) => {
 };
 
 /* ── PDF REAL (vectorial, jsPDF) ─────────────────────────── */
-const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · IA" : ""));
+const dutySuffix = (d) => d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
 
 const generatePDF = async (d, r, dolar, s, opts = {}) => {
   // Layout en src/lib/pdfQuote.js (renderizable también desde Node para revisarlo)
   const { buildQuotePDF } = await import("./lib/pdfQuote.js");
   const { doc, filename } = await buildQuotePDF(d, r, dolar, s, opts);
   doc.save(filename);
+  return { file:new File([doc.output("blob")], filename, {type:"application/pdf"}) };
 };
 
 /* ── STATUS ──────────────────────────────────────────────── */
@@ -371,12 +241,11 @@ const Header = ({ onAdmin, dolar, dolarErr, dolarLoading, onRefreshDolar, compac
             Importaciones puerta a puerta
           </p>
           <h1 style={{ fontSize:"clamp(25px, 6.4vw, 40px)", fontWeight:900, lineHeight:1.15, color:"#15233b", marginBottom:10, letterSpacing:-0.5 }}>
-            Cotizá tu importación de{" "}
-            <span style={{ background:"linear-gradient(120deg,#f26c1e,#e0610a 55%,#fdb813)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>China</span>
-            {" "}a Argentina
+            Cotizá tu importación a{" "}
+            <span style={{ background:"linear-gradient(120deg,#f26c1e,#e0610a 55%,#fdb813)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Argentina</span>
           </h1>
           <p style={{ color:"#44546a", fontSize:"clamp(13.5px, 3.7vw, 15.5px)", maxWidth:560, margin:"0 auto", lineHeight:1.55 }}>
-            Aéreo y marítimo, con impuestos, flete y logística calculados al instante. Tu cotización lista en PDF o WhatsApp.
+            Compará envío aéreo comercial y marítimo por m³ a Argentina. Tu cotización lista en PDF o WhatsApp.
           </p>
           <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginTop:16 }}>
             {(dhlChip
@@ -508,13 +377,18 @@ const BRAND = { orange: "#f26c1e", orangeSoft: "#fff2e9", blue: "#18548a", blueD
 
 /* ── CALCULATOR FORM ─────────────────────────────────────── */
 const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, dolarLoading, onRefresh, onTrackStarted }) => {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     nombre:"", whatsapp:"", email:"", producto:"", hsCode:"", paisOrigen:"", origenSel:"", fob:"",
     categoria:"", manualDuty:"", dutyManual:false,
     tipo:"avion", subTipo:"comercial", seaMode:"m3", peso:"", largo:"", ancho:"", alto:"",
-    m3manual:"", cantidad:"", bultos:"", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null,
-    cp:"", bultosIguales: true, packageGroups: [], pesoBulto: ""
-  });
+    m3manual:"", cantidad:"", bultos:"1", files:[], aiDutyRate: null, aiSuggestion: "", aiTelemetry: null,
+    cp:"", bultosIguales: true, packageGroups: [], pesoBulto: "",
+    ...loadClientProfile(),
+  }));
+  const [profileSaved, setProfileSaved] = useState(false);
+  useEffect(() => {
+    setProfileSaved(saveClientProfile(form));
+  }, [form.nombre, form.whatsapp, form.email, form.cp]);
   const [errors, setErrors]       = useState({});
   const [fileNames, setFileNames] = useState([]);
   const [fileObjs, setFileObjs]   = useState([]);
@@ -523,49 +397,32 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const [aiLoading, setAiLoading] = useState(null); // null | "product" | "hs"
   const [aiResult, setAiResult]   = useState(null);
   const [altOpen, setAltOpen]     = useState(false); // "Ver alternativas" del clasificador
-  const [catQuery, setCatQuery]   = useState("");
-  const [catOpen, setCatOpen]     = useState(false);
-
+  const analysisRequest = useRef(0);
+  const [submitting, setSubmitting] = useState(false);
   const set = (k, v) => {
     if (!touched) { onTrackStarted(); setTouched(true); }
-    setForm(f => ({ ...f, [k]: v }));
+    if (k === "producto" || k === "hsCode") {
+      analysisRequest.current++;
+      setAiLoading(null); setAiResult(null);
+      setForm(f => ({ ...f, [k]:v, aiDutyRate:null, aiSuggestion:"", aiTelemetry:null, tariffSource:null, tariffSourceDate:null,
+        categoria:"", manualDuty:"", dutyManual:false, ...(k === "producto" ? {hsCode:""} : {}) }));
+    } else setForm(f => ({ ...f, [k]:v }));
   };
-
-  // Selección de país de origen: define la tarifa aérea (USA=20, resto=23 USD/kg)
   const handleOrigen = (sel) => {
     if (!touched) { onTrackStarted(); setTouched(true); }
-    setForm(f => ({ ...f, origenSel: sel, paisOrigen: (sel && sel !== "otro") ? sel : "" }));
-  };
-
-  // Selección de categoría: setea el % de derecho directamente (sin IA)
-  const handleCategoria = (label) => {
-    if (!touched) { onTrackStarted(); setTouched(true); }
-    const cat = CATEGORIES.find(c => c.label === label);
-    setAiResult(null);
-    if (cat) {
-      setForm(f => ({
-        ...f,
-        categoria: label,
-        aiDutyRate: cat.rate,
-        manualDuty: "", dutyManual: false,
-        aiSuggestion: `Categoría: ${label} — Derecho de importación ${cat.rate}%`,
-        aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: `categoria:${label}` } : f.aiTelemetry,
-      }));
-    } else {
-      // "Seleccionar…": vuelve a usar IA / HS Code / valor por defecto
-      setForm(f => ({ ...f, categoria:"", aiDutyRate: null, aiSuggestion:"" }));
-    }
+    setForm(f => ({ ...f, origenSel:sel, paisOrigen:sel === "otro" ? "" : sel }));
   };
 
   // Arancel manual: el cliente que ya conoce su derecho de importación lo ingresa directo
   const handleManualDuty = (val) => {
     if (!touched) { onTrackStarted(); setTouched(true); }
-    const v = (val || "").toString().replace(/[^0-9.]/g, "");
+    const v = (val || "").toString().replace(",", ".");
+    analysisRequest.current++; setAiLoading(null);
     if (v === "" || isNaN(+v)) {
       setForm(f => ({ ...f, manualDuty:"", dutyManual:false, aiDutyRate: f.categoria ? f.aiDutyRate : null }));
     } else {
-      setCatQuery(""); setAiResult(null);
-      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", aiSuggestion: `Arancel ingresado manualmente: ${v}%`,
+      analysisRequest.current++; setAiLoading(null); setAiResult(null);
+      setForm(f => ({ ...f, manualDuty: v, dutyManual:true, aiDutyRate: +v, categoria:"", tariffSource:"Ingresado por el usuario", tariffSourceDate:null, aiSuggestion: `Arancel ingresado manualmente: ${v}%`,
         // telemetría: el cliente pisó el resultado del clasificador con un % manual
         aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: `manual:${v}%` } : f.aiTelemetry }));
     }
@@ -573,61 +430,61 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
 
   // El cliente eligió una de las alternativas sugeridas: se aplica ese código
   // (queda registrado en telemetría como corrección manual del resultado IA)
-  const applyAlternative = (alt) => {
-    setAiResult(r => ({ ...r, hsCode: alt.hsCode, dutyRate: alt.dutyRate, description: alt.description || r.description, officialDesc: alt.description, motivo: null, confidence: "media" }));
-    setAltOpen(false);
-    setForm(f => ({
-      ...f, hsCode: alt.hsCode, aiDutyRate: alt.dutyRate, categoria: "", manualDuty: "", dutyManual: false,
-      aiSuggestion: `${alt.description || alt.hsCode} — Derecho de importación: ${alt.dutyRate}% (alternativa elegida por el cliente)`,
-      aiTelemetry: f.aiTelemetry ? { ...f.aiTelemetry, corrected: true, correctedTo: alt.hsCode } : f.aiTelemetry,
-    }));
-  };
-
-  const handleAnalyzeProduct = async () => {
-    if (!form.producto.trim() || aiLoading) return;
-    setAiLoading("product");
-    setAltOpen(false);
+  const applyAlternative = async (alt) => {
+    const request = ++analysisRequest.current;
+    setAiLoading("hs"); setAltOpen(false);
     try {
-      const result = await analyzeProduct(form.producto);
+      const result = await analyzeHsCode(alt.hsCode);
+      if (request !== analysisRequest.current || !Number.isFinite(result.dutyRate)) return;
       setAiResult(result);
-      setForm(f => ({
-        ...f,
-        categoria: "", manualDuty: "", dutyManual: false,
-        hsCode: result.hsCode || f.hsCode,
-        aiDutyRate: result.dutyRate ?? null,
-        aiSuggestion: `${result.description} — Derecho de importación: ${result.dutyRate}% (confianza: ${result.confidence})`,
-        // Telemetría del clasificador (Fase 10): viaja con el lead, sin datos sensibles
-        aiTelemetry: {
-          query: f.producto.slice(0, 120), method: result.method || null, chosen: result.hsCode,
-          confidence: result.confidence, precision: result.precision, source: (result.source || "").slice(0, 90),
-          generic16: result.precision === "GENERIC_FALLBACK", alternativesShown: (result.alternatives || []).length,
-          ts: Date.now(), corrected: false,
-        },
-      }));
-    } catch (e) {
-      setAiResult({ error: true });
-    }
-    setAiLoading(null);
+      setForm(f => ({...f,hsCode:result.hsCode,aiDutyRate:result.dutyRate,manualDuty:"",dutyManual:false,categoria:"",
+        tariffSource:result.source,tariffSourceDate:result.baseDate || result.sourceDate,
+        aiSuggestion:`${result.description} — Derecho estimado: ${result.dutyRate}% (alternativa elegida)`,
+        aiTelemetry:{...f.aiTelemetry,corrected:true,correctedTo:alt.hsCode}}));
+    } catch { if(request === analysisRequest.current) setAiResult({error:true}); }
+    finally {if(request === analysisRequest.current) setAiLoading(null);}
   };
 
-  const handleAnalyzeHsCode = async () => {
-    if (!form.hsCode.trim() || aiLoading) return;
-    setAiLoading("hs");
+  const analyze = async (type) => {
+    const value = type === "product" ? form.producto : form.hsCode;
+    if (!value.trim() || aiLoading) return null;
+    const request = ++analysisRequest.current;
+    setAiLoading(type === "product" ? "product" : "hs"); setAltOpen(false);
     try {
-      const result = await analyzeHsCode(form.hsCode);
-      setAiResult(r => ({ ...r, ...result }));
-      setForm(f => ({
-        ...f,
-        categoria: "", manualDuty: "", dutyManual: false,
-        aiDutyRate: result.dutyRate ?? f.aiDutyRate,
-        aiSuggestion: result.description
-          ? `${result.description} — Arancel por HS ${f.hsCode}: ${result.dutyRate}% (confianza: ${result.confidence})`
-          : f.aiSuggestion,
-      }));
+      const result = await (type === "product" ? analyzeProduct(value) : analyzeHsCode(value));
+      if (request !== analysisRequest.current) return null;
+      if (!Number.isFinite(result.dutyRate)) throw new Error(result.error || "Sin arancel verificable");
+      setAiResult(result);
+      const patch = {
+        categoria:"", manualDuty:"", dutyManual:false,
+        hsCode: /FAMILY|GENERIC|CHAPTER/.test(result.precision || "") ? "" : (result.hsCode || ""),
+        aiDutyRate:result.dutyRate,
+        aiSuggestion:`${result.description} — Derecho estimado: ${result.dutyRate}% (${result.confidence})`,
+        tariffSource:result.source, tariffSourceDate:result.baseDate || result.sourceDate,
+        aiTelemetry:{ query:value.slice(0,120), method:result.method, chosen:result.hsCode, baseDate:result.baseDate || result.sourceDate,
+          confidence:result.confidence, precision:result.precision, source:result.source, ts:Date.now(), corrected:false },
+      };
+      setForm(f => ({ ...f, ...patch }));
+      return { ...form, ...patch };
     } catch {
-      setAiResult({ error: true });
-    }
-    setAiLoading(null);
+      if (request === analysisRequest.current) setAiResult({ error:true });
+      return null;
+    } finally { if (request === analysisRequest.current) setAiLoading(null); }
+  };
+  const handleAnalyzeProduct = () => analyze("product");
+  const handleAnalyzeHsCode = () => analyze("hs");
+  const submit = async () => {
+    if (submitting || aiLoading || !validate()) return;
+    setSubmitting(true);
+    try {
+      let data = form;
+      if (data.aiDutyRate == null) {
+        data = await analyze(form.hsCode.trim() ? "hs" : "product");
+        if (!data) return;
+      }
+      const quote = publicQuote(data, settings);
+      onCalculate(quote.d, quote.r);
+    } finally { setSubmitting(false); }
   };
 
   const validate = () => {
@@ -637,16 +494,22 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     if (!form.whatsapp.trim()) e.whatsapp = "Ingresá tu WhatsApp";
     else if (form.whatsapp.replace(/\D/g, "").length < 8) e.whatsapp = "Ingresá un número de WhatsApp válido";
     if (!form.cp.trim()) e.cp = "Ingresá el código postal de entrega";
+    else if (!normalizeCP(form.cp).num) e.cp = "Usá 4 números o un CPA argentino, por ejemplo Y4600ABC";
+    if (!form.origenSel || !form.paisOrigen.trim()) e.origen = "Elegí el país de origen";
+    else if (!originAllowed(form.paisOrigen)) e.origen = "Esta ruta de importación no está disponible";
     if (!form.producto.trim()) e.producto = "Requerido";
+    if (form.dutyManual && (!Number.isFinite(+form.manualDuty) || +form.manualDuty < 0 || +form.manualDuty > 100)) e.producto = "El derecho manual debe estar entre 0% y 100%";
     if (!form.fob || +form.fob <= 0) e.fob = "Ingresá un valor mayor a 0";
     else if (+form.fob > 10000000) e.fob = "Valor demasiado alto — revisalo";
     if (!form.peso || +form.peso <= 0) e.peso = "Ingresá el peso total";
     if (form.tipo === "avion") {
       if (form.bultosIguales) {
-        if (!form.largo || !form.ancho || !form.alto) e.medidas = "Ingresá largo, ancho y alto";
+        if (![form.largo,form.ancho,form.alto].every(v => Number.isFinite(+v) && +v > 0)) e.medidas = "Ingresá medidas mayores a cero";
+        if (form.bultos && (!Number.isInteger(+form.bultos) || +form.bultos < 1)) e.medidas = "La cantidad de bultos debe ser un número entero mayor a cero";
       } else {
-        const gOk = (form.packageGroups || []).some(g => +g.cant > 0 && +g.largo > 0 && +g.ancho > 0 && +g.alto > 0);
-        if (!gOk) e.medidas = "Completá cantidad y medidas de al menos un grupo de bultos";
+        const groups = form.packageGroups || [];
+        const gOk = groups.length > 0 && groups.every(g => Number.isInteger(+g.cant) && +g.cant > 0 && [g.largo,g.ancho,g.alto,g.pesoCaja].every(v => Number.isFinite(+v) && +v > 0));
+        if (!gOk) e.medidas = "Completá cantidad, peso y medidas de todos los grupos";
       }
     }
     if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
@@ -734,7 +597,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
   const applyExtracted = () => {
     const x = docX.data; if (!x) return;
     const fobVal = x.valorTotal ?? (x.precioUnitario && x.cantidad ? x.precioUnitario * x.cantidad : null);
-    const origen = ["China", "Estados Unidos (USA)", "España"].find(o => (x.paisOrigen || "").toLowerCase().includes(o.split(" ")[0].toLowerCase()));
+    const origen = ["China", "Estados Unidos (USA)"].find(o => (x.paisOrigen || "").toLowerCase().includes(o.split(" ")[0].toLowerCase()));
     setForm(f => ({
       ...f,
       producto: x.producto || f.producto,
@@ -807,22 +670,32 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
       <main style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }}>
 
         <Card icon="👤" title="1 · Tus datos" bg="#eef5fb">
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:16 }}>
+            <p style={{ fontSize:12, color:"#64748b", lineHeight:1.5, margin:0 }}>
+              {profileSaved ? "Tus datos quedan guardados en este navegador para la próxima cotización." : "Podés volver a editar esta consulta sin cargar los datos otra vez."}
+            </p>
+            {(form.nombre || form.whatsapp || form.email || form.cp) && <button type="button"
+              onClick={() => setForm(f => ({ ...f, nombre:"", whatsapp:"", email:"", cp:"" }))}
+              style={{ border:0, background:"transparent", padding:"4px 0", color:"#18548a", fontSize:12, cursor:"pointer", textDecoration:"underline" }}>
+              Borrar mis datos
+            </button>}
+          </div>
           <div style={rowS}>
             <Field label="Nombre y apellido" required>
-              <Inp placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+              <Inp autoComplete="name" placeholder="Tu nombre y apellido" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
               {errors.nombre && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.nombre}</p>}
             </Field>
             <Field label="WhatsApp" required>
-              <Inp placeholder="+54 9 ..." value={form.whatsapp} onChange={e => set("whatsapp", e.target.value)} />
+              <Inp type="tel" autoComplete="tel" placeholder="+54 9 ..." value={form.whatsapp} onChange={e => set("whatsapp", e.target.value)} />
               {errors.whatsapp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.whatsapp}</p>}
             </Field>
           </div>
           <div style={rowS}>
             <Field label="Email (opcional)">
-              <Inp type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+              <Inp type="email" autoComplete="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
             </Field>
             <Field label="Código postal de entrega" required hint="Se utiliza para estimar el plazo de entrega DHL.">
-              <Inp placeholder="Ej: 4600 o Y4600ABC" value={form.cp} onChange={e => set("cp", e.target.value)} />
+              <Inp autoComplete="postal-code" placeholder="Ej: 4600 o Y4600ABC" value={form.cp} onChange={e => set("cp", e.target.value)} />
               {errors.cp && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.cp}</p>}
             </Field>
           </div>
@@ -921,65 +794,31 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <div style={{ display:"flex", gap:8 }}>
               <Inp placeholder="Descripción del producto" value={form.producto}
                 onChange={e => set("producto", e.target.value)} style={{ flex:1 }} />
-              <button onClick={handleAnalyzeProduct} disabled={aiLoading === "product" || !form.producto.trim()} aria-label="Analizar producto con IA"
+              <button onClick={handleAnalyzeProduct} disabled={!!aiLoading || submitting || !form.producto.trim()} aria-label="Buscar clasificación del producto"
                 style={{ padding:"0 14px", borderRadius:10, border:"none", background: aiLoading === "product" ? "#e2e8f0" : "linear-gradient(135deg,#0f3d68,#18548a)",
                   color: aiLoading === "product" ? "#94a3b8" : "white", fontWeight:700, fontSize:12, cursor: aiLoading === "product" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
-                {aiLoading === "product" ? "⏳ Analizando…" : "🤖 Analizar IA"}
+                {aiLoading === "product" ? "⏳ Analizando…" : "Buscar arancel"}
               </button>
             </div>
             {errors.producto && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.producto}</p>}
           </Field>
 
-          <Field label="Categoría del producto" hint="Escribí tu producto y elegí la categoría de la lista. Si no está, usá '🤖 Analizar IA' o el HS Code. Arancel referencial (AEC extrazona); confirmá el exacto en VUCE o con tu despachante.">
-            <div style={{ position:"relative" }}>
-              <Inp placeholder="Buscá: zapatilla, celular, perfume, heladera…"
-                value={catQuery}
-                onChange={e => { const v = e.target.value; setCatQuery(v); setCatOpen(true); if (!v.trim() || (form.categoria && v !== form.categoria)) handleCategoria(""); }}
-                onFocus={() => setCatOpen(true)}
-                onBlur={() => setTimeout(() => setCatOpen(false), 150)} />
-              {catOpen && (() => {
-                const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-                const q = norm(catQuery.trim());
-                const matches = CATEGORIES.filter(c => !q || norm(c.label).includes(q));
-                if (!matches.length) return (
-                  <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:20, background:"white", border:"1px solid #e2e8f0", borderRadius:12, marginTop:4, padding:"12px 14px", fontSize:12, color:"#94a3b8", boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-                    No está en la lista — usá <strong>🤖 Analizar IA</strong> o cargá el HS Code.
-                  </div>
-                );
-                return (
-                  <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:20, background:"white", border:"1px solid #e2e8f0", borderRadius:12, marginTop:4, maxHeight:300, overflowY:"auto", boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
-                    {matches.map(c => (
-                      <button key={c.label} type="button"
-                        onMouseDown={() => { handleCategoria(c.label); setCatQuery(c.label); setCatOpen(false); }}
-                        style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", textAlign:"left", padding:"10px 14px", border:"none", borderBottom:"1px solid #eef2f7", background:"white", cursor:"pointer", fontSize:13, color:"#334155" }}>
-                        <span>{c.label}</span>
-                        <span style={{ fontWeight:700, color:"#0f3d68", fontSize:12, flexShrink:0, marginLeft:10 }}>{c.rate}%</span>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-            {form.categoria && (
-              <p style={{ fontSize:12, color:"#15803d", fontWeight:700, marginTop:6 }}>
-                ✅ {form.categoria}: derecho de importación {CATEGORIES.find(c => c.label === form.categoria)?.rate}%
-              </p>
-            )}
-          </Field>
-
+          <p style={{ fontSize:12, color:"#64748b", lineHeight:1.6, marginBottom:16 }}>
+            Describí qué es, para qué sirve y de qué material está hecho. Usamos una sola búsqueda para sugerir su clasificación y arancel. También se analiza al calcular.
+          </p>
           {aiResult && !aiResult.error && (
-            <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:10, padding:10, marginBottom:16, fontSize:12 }}>
-              <p style={{ fontWeight:700, color:"#166534", marginBottom:4 }}>✅ Clasificación arancelaria</p>
+            <div style={{ background:aiResult.requiresManualValidation ? "#fffbeb" : "#f0fdf4", border:"1px solid #cbd5e1", borderRadius:10, padding:10, marginBottom:16, fontSize:12 }}>
+              <p style={{ fontWeight:700, color:"#166534", marginBottom:4 }}>Clasificación y derecho estimados</p>
               <p style={{ color:"#15803d" }}>📋 {aiResult.description}</p>
               {aiResult.officialDesc && aiResult.officialDesc !== aiResult.description && (
-                <p style={{ color:"#15803d", fontSize:11 }}>📖 Descripción oficial: {aiResult.officialDesc.length > 140 ? aiResult.officialDesc.slice(0, 140) + "…" : aiResult.officialDesc}</p>
+                <details style={{margin:"6px 0",color:"#475569",fontSize:11}}><summary style={{cursor:"pointer"}}>Ver descripción oficial</summary><p style={{marginTop:6,lineHeight:1.5}}>{aiResult.officialDesc}</p></details>
               )}
-              <p style={{ color:"#15803d" }}>🔢 NCM probable: <strong>{aiResult.hsCode}</strong>{aiResult.precisionLabel ? <span style={{ color:"#64748b" }}> · {aiResult.precisionLabel}</span> : null}</p>
+              <p style={{ color:"#15803d" }}>{/FAMILY|GENERIC|CHAPTER/.test(aiResult.precision || "") ? "Referencia orientativa:" : "NCM probable:"} <strong>{aiResult.hsCode}</strong>{aiResult.precisionLabel ? <span style={{ color:"#64748b" }}> · {aiResult.precisionLabel}</span> : null}</p>
               <p style={{ color:"#15803d" }}>📊 Derecho de importación: <strong>{aiResult.dutyRate}%</strong> — precisión: {aiResult.precision === "FAMILY_ESTIMATE" ? "estimación por categoría" : aiResult.precision === "GENERIC_FALLBACK" ? "genérica" : aiResult.confidence}</p>
               {aiResult.motivo && <p style={{ fontSize:11, color:"#64748b" }}>💬 {aiResult.motivo}</p>}
               <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>
                 🏷️ {aiResult.dutyType === "DIE_EXTRAZONA" ? "Derecho EXTRAZONA (aplica a China/USA — no es el intrazona Mercosur)" : ""}
-                {aiResult.source ? ` · Fuente: ${aiResult.source}` : ""} · Base arancelaria actualizada al {(aiResult.baseDate || aiResult.sourceDate || "").split("-").reverse().join("/")}
+                {aiResult.source ? ` · Fuente: ${aiResult.source.includes("ARCA") ? "Arancel Integrado ARCA" : aiResult.source}` : ""} · Base arancelaria actualizada al {(aiResult.baseDate || aiResult.sourceDate || "").split("-").reverse().join("/")}
               </p>
               {(aiResult.alternatives || []).length > 0 && (
                 <div style={{ marginTop:6 }}>
@@ -1006,23 +845,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           )}
           {aiResult?.error && (
             <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:10, padding:10, marginBottom:16, fontSize:12, color:"#991b1b" }}>
-              No se pudo analizar el producto. Completá el HS Code manualmente.
+              No pudimos obtener un arancel. Reintentá o ingresá un código o porcentaje conocido en la sección opcional.
             </div>
           )}
 
           <div style={rowS}>
-            <Field label="HS Code / Código arancelario" hint="Completá manualmente o detectá con IA">
-              <div style={{ display:"flex", gap:6 }}>
-                <Inp placeholder="Ej: 8471.30.19" value={form.hsCode} onChange={e => set("hsCode", e.target.value)} style={{ flex:1 }} />
-                <button onClick={handleAnalyzeHsCode} disabled={aiLoading === "hs" || !form.hsCode.trim()} title="Buscar arancel por HS Code" aria-label="Buscar arancel por HS Code"
-                  style={{ padding:"0 10px", borderRadius:10, border:"none",
-                    background: aiLoading === "hs" ? "#e2e8f0" : "linear-gradient(135deg,#18548a,#1e6fb0)",
-                    color: aiLoading === "hs" ? "#94a3b8" : "white", fontWeight:700, fontSize:13,
-                    cursor: aiLoading === "hs" ? "wait" : "pointer", whiteSpace:"nowrap" }}>
-                  {aiLoading === "hs" ? "⏳" : "🔍"}
-                </button>
-              </div>
-            </Field>
             <Field label="Valor FOB / Valor productos (USD)" required hint="Valor total según factura del proveedor">
               <div style={{ position:"relative" }}>
                 <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#94a3b8", fontWeight:700 }}>USD</span>
@@ -1039,8 +866,18 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             </div>
           </Field>
 
-          <div style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"12px 14px", marginBottom:16 }}>
-            <Field label="¿Ya conocés tu arancel? Ingresalo directo (%)" hint="Opcional. Si lo completás, se usa este valor y podés omitir la categoría y el HS Code.">
+          <details style={{ background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:"12px 14px", marginBottom:16 }}>
+            <summary style={{cursor:"pointer",fontWeight:800,color:"#0f3d68",fontSize:13,marginBottom:12}}>Ya conozco mi código o arancel (opcional)</summary>
+            <Field label="NCM / HS Code (opcional)" hint="NCM argentino: 8 dígitos. Un HS de 6 dígitos puede abarcar varios aranceles.">
+              <div style={{display:"flex",gap:8}}>
+                <Inp placeholder="Ej: 8205.20.00" value={form.hsCode} onChange={e => set("hsCode",e.target.value)} style={{flex:1,minWidth:0}} />
+                <button onClick={handleAnalyzeHsCode} disabled={!!aiLoading || submitting || !form.hsCode.trim()} aria-label="Buscar arancel por código"
+                  style={{padding:"0 12px",borderRadius:10,border:0,background:"#18548a",color:"white",fontWeight:700,cursor:"pointer"}}>
+                  {aiLoading === "hs" ? "Buscando…" : "Buscar"}
+                </button>
+              </div>
+            </Field>
+            <Field label="Derecho de importación (%)" hint="Opcional. Si lo completás, se usa tu porcentaje en lugar del sugerido.">
               <div style={{ position:"relative", maxWidth:220 }}>
                 <Inp type="number" placeholder="Ej: 20" value={form.manualDuty}
                   onChange={e => handleManualDuty(e.target.value)} min={0} max={100} step="0.5" style={{ paddingRight:32 }} />
@@ -1050,16 +887,16 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             {form.dutyManual && (
               <p style={{ fontSize:12, color:"#92400e", fontWeight:700, margin:0 }}>✅ Derecho de importación cargado manualmente: {form.manualDuty}%</p>
             )}
-          </div>
+          </details>
 
-          <Field label="País de origen">
+          <Field label="País de origen" required>
             <select value={form.origenSel} onChange={e => handleOrigen(e.target.value)} style={{ ...inputStyle, cursor:"pointer" }}>
               <option value="">Seleccionar país…</option>
               <option value="China">China</option>
               <option value="Estados Unidos (USA)">Estados Unidos (USA)</option>
-              <option value="España">España</option>
               <option value="otro">Otro país (escribir)…</option>
             </select>
+            {errors.origen && <p style={{ color:"#ef4444", fontSize:12 }}>{errors.origen}</p>}
             {form.origenSel === "otro" && (
               <Inp placeholder="Escribí el país de origen" value={form.paisOrigen}
                 onChange={e => set("paisOrigen", e.target.value)} style={{ marginTop:10 }} />
@@ -1068,9 +905,19 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         </Card>
 
         <Card icon="🌐" title="4 · Tipo de importación" bg="#eef5fb">
-          <TypeSel value={form.tipo} onChange={v => set("tipo", v)} />
-          {form.tipo === "avion" && <SubTipoSel value={form.subTipo} onChange={v => set("subTipo", v)} />}
-          {form.tipo === "barco" && <SeaModeSel value={form.seaMode} onChange={v => set("seaMode", v)} />}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {[{v:"avion",icon:"✈️",label:"Aéreo comercial",note:"Para cargas que necesitás antes"},{v:"barco",icon:"🚢",label:"Marítimo por m³",note:"Régimen general"}].map(mode => (
+              <button key={mode.v} type="button" aria-pressed={form.tipo === mode.v} onClick={() => set("tipo",mode.v)}
+                style={{padding:"18px 10px",borderRadius:16,border:`2px solid ${form.tipo === mode.v ? "#18548a" : "#e2e8f0"}`,background:form.tipo === mode.v ? "#eef5fb" : "white",cursor:"pointer",textAlign:"left"}}>
+                <span style={{fontSize:25,display:"block",marginBottom:8}}>{mode.icon}</span>
+                <strong style={{color:"#0f3d68",fontSize:14,display:"block"}}>{mode.label}</strong>
+                <span style={{fontSize:11,color:"#64748b",display:"block",marginTop:6,lineHeight:1.5}}>{mode.note}</span>
+              </button>
+            ))}
+          </div>
+          <p style={{ marginTop:12, color:"#64748b", fontSize:12, lineHeight:1.6 }}>
+            {form.tipo === "avion" ? "Envío comercial. Desde China, elegimos DHL Express a partir de 10 kg facturables cuando está disponible." : "Régimen general marítimo por m³. El volumen determina el flete de tu carga."}
+          </p>
         </Card>
 
         <Card icon="📐" title="5 · Peso y medidas">
@@ -1078,7 +925,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
             <>
               <p style={{ fontSize:12, color:"#64748b", marginBottom:10 }}>Medidas para calcular el <strong>peso volumétrico</strong> — <strong>las medidas corresponden a cada bulto</strong></p>
               <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}>
-                <span style={{ fontSize:12, fontWeight:700, color:"#334155" }}>¿Todos los bultos tienen las mismas medidas?</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#334155" }}>¿Todos los bultos tienen el mismo tamaño y peso?</span>
                 {[["Sí", true], ["No", false]].map(([lbl, v]) => (
                   <button key={lbl} onClick={() => setIguales(v)}
                     style={{ padding:"6px 18px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:800,
@@ -1136,7 +983,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           )}
           <div style={rowS}>
             {form.tipo === "avion" && form.bultosIguales && (
-              <Field label="Peso por bulto (kg)" hint="Como las medidas: es el peso de CADA bulto.">
+              <Field label="Peso por bulto (kg)" hint="Ingresá cuánto pesa UNA caja, no el total del envío.">
                 <div style={{ position:"relative" }}>
                   <Inp type="number" placeholder="0.00" value={form.pesoBulto} onChange={e => setPesoBulto(e.target.value)} style={{ paddingRight:36 }} />
                   <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
@@ -1144,16 +991,17 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
               </Field>
             )}
             {form.bultosIguales && (
-              <Field label="Cantidad de bultos" hint="Multiplica medidas y peso por bulto.">
+              <Field label="Cantidad de bultos" hint="Cuántas cajas iguales vas a enviar.">
                 <Inp type="number" placeholder="Ej: 1" value={form.bultos} onChange={e => setBultosCant(e.target.value)} min={1} />
               </Field>
             )}
             <Field label="Peso real total (kg)" required
-              hint={form.bultosIguales && form.pesoBulto !== "" ? "Se calcula solo: peso por bulto × cantidad (podés ajustarlo)."
-                : !form.bultosIguales && (form.packageGroups || []).some(g => +g.pesoCaja > 0) ? "Se calcula solo: Σ cajas × peso por caja (podés ajustarlo)." : undefined}>
+              hint={form.tipo === "barco" ? "Peso total de tu carga." : form.bultosIguales && form.pesoBulto !== "" ? `${form.bultos || 1} bulto(s) × ${form.pesoBulto} kg. Total calculado automáticamente.`
+                : !form.bultosIguales && (form.packageGroups || []).some(g => +g.pesoCaja > 0) ? "Total calculado desde los grupos. Editá el peso de cada caja arriba." : undefined}>
               <div style={{ position:"relative" }}>
                 <Inp type="number" placeholder="0.00" value={form.peso}
-                  onChange={e => setForm(f => ({ ...f, peso: e.target.value, pesoBulto: "" }))} style={{ paddingRight:36 }} />
+                  readOnly={form.tipo === "avion" && (form.pesoBulto !== "" || !form.bultosIguales)}
+                  onChange={e => set("peso", e.target.value)} style={{ paddingRight:36, background:form.tipo === "avion" ? "#eef5fb" : "#f8fafc" }} />
                 <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", fontSize:12, color:"#94a3b8" }}>kg</span>
               </div>
               {errors.peso && <p style={{ color:"#ef4444", fontSize:11, marginTop:4 }}>{errors.peso}</p>}
@@ -1190,11 +1038,11 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
           ⚠️ {settings.legal}
         </div>
 
-        <button onClick={() => { if (validate()) onCalculate(form, calculate(form, settings)); }}
+        <button onClick={submit} disabled={submitting || !!aiLoading}
           style={{ width:"100%", padding:"17px 0", borderRadius:16, border:"none",
             background:"linear-gradient(135deg,#f26c1e 0%,#f2741b 55%,#fdb813 130%)", color:"white",
             fontSize:18, fontWeight:900, cursor:"pointer", boxShadow:"0 6px 24px rgba(242,108,30,0.4)" }}>
-          Calcular mi importación →
+          {submitting ? "Preparando tu cotización…" : "Calcular mi importación →"}
         </button>
         <p style={{ textAlign:"center", fontSize:12, color:"#94a3b8", marginTop:12 }}>Cotización al instante · Valores en USD y pesos argentinos</p>
       </main>
@@ -1209,7 +1057,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         </div>
         {TARIFF_META.baseDate && (
           <p style={{ fontSize:11, color:"#b0bccb", marginTop:10 }}>
-            Base arancelaria oficial (ARCA) actualizada al {TARIFF_META.baseDate.split("-").reverse().join("/")}
+            Base ARCA del {TARIFF_META.baseDate.split("-").reverse().join("/")}
           </p>
         )}
       </footer>
@@ -1244,47 +1092,35 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
   // por kilo y marítimo por m³ — este último solo si hay volumen calculable
   // (m³ manual o medidas L×A×H, multiplicado por bultos). Envío personal
   // queda aparte (otra lógica, sin comparador).
-  const esPersonal = d0.tipo === "avion" && d0.subTipo === "personal";
-  const volTotal = packTotals(d0).volCm3; // Σ bultos (grupos o legacy)
-  const m3Est = +d0.m3manual > 0 ? +d0.m3manual : volTotal / 1000000;
-
-  // DHL Express: solo China + comercial + ≥ mínimo, y con el flag público activo
-  const dhlElig = esPersonal ? { ok: false, reason: "personal" } : dhlEligibility(d0, s);
-  const dhlVisible = !!(s.dhlPublic && s.dhlActive);
-  const dhlDisabled = dhlVisible && !dhlElig.ok && dhlElig.reason === "peso"; // tarjeta deshabilitada <10 kg
-  const delivery = deliveryEstimate(d0.cp, s);
-
-  const baseKey = d0.tipo === "avion" ? "air" : (d0.seaMode === "kg" ? "seaKg" : "seaM3");
-  const MODES = esPersonal ? [] : [
-    +d0.peso > 0 && { key: "air",   label: "✈️ Aéreo comercial",  pdf: "aéreo",        d: { ...d0, tipo: "avion", subTipo: "comercial" } },
-    dhlVisible && dhlElig.ok && { key: "dhl", label: "⚡ DHL Express", pdf: "DHL",     d: { ...d0, tipo: "dhl" } },
-    +d0.peso > 0 && { key: "seaKg", label: "🚢 Marítimo por kilo", pdf: "marítimo kg",  d: { ...d0, tipo: "barco", seaMode: "kg" } },
-    m3Est > 0    && { key: "seaM3", label: "🚢 Marítimo por m³",   pdf: "marítimo m³",  d: { ...d0, tipo: "barco", seaMode: "m3", m3manual: m3Est } },
-  ].filter(Boolean).map(m => ({ ...m, r: m.key === baseKey ? r0 : calculate(m.d, s) }));
-
-  // La modalidad activa inicial es la que el sistema ya seleccionaba (no se
-  // cambia automáticamente al usuario a DHL)
+  const esPersonal = false;
+  const volTotal = packTotals(d0).volCm3;
+  const MODES = publicModes(d0, s);
+  const baseKey = d0.tipo === "barco" ? "seaM3" : (MODES.some(m => m.key === "dhl") ? "dhl" : "air");
   const [modeKey, setModeKey] = useState(baseKey);
-  const active = MODES.find(m => m.key === modeKey)
-    || { key: baseKey, d: d0, r: r0, pdf: esPersonal ? "personal" : (d0.tipo === "avion" ? "aéreo" : (d0.seaMode === "kg" ? "marítimo kg" : "marítimo m³")) };
+  const active = MODES.find(m => m.key === modeKey) || MODES[0];
   const d = active.d, r = active.r;
   const hayComparador = MODES.length > 1;
   const sinMedidas = modeKey === "air" && volTotal <= 0;
-  const totalCards = MODES.length + (dhlDisabled ? 1 : 0);
-
-  const tipoLabel = r.isDhl ? "DHL Express"
-    : d.tipo === "avion"
-      ? (d.subTipo === "personal" ? "Aéreo · Envío Personal (Franquicia)" : "Aéreo Comercial")
-      : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
+  const dhlDisabled = false;
+  const delivery = deliveryEstimate(d0.cp, s);
+  const totalCards = MODES.length;
+  const tipoLabel = r.isDhl ? "DHL Express" : d.tipo === "avion" ? "Aéreo comercial" : "Marítimo por m³ · Régimen general";
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [preparedPdf, setPreparedPdf] = useState(null);
+  const pdfSignature = JSON.stringify({d,r,dolar,s});
+  const sharePdf = async () => {
+    try { await navigator.share({ files:[preparedPdf.file], title:"Presupuesto FVR" }); }
+    catch (error) { if (error.name !== "AbortError") alert("Podés adjuntar el PDF descargado desde WhatsApp."); }
+  };
 
   const doPDF = async () => {
     if (pdfLoading) return;
     setPdfLoading(true);
     try {
-      await generatePDF(d, r, dolar, s); // PDF de la modalidad ACTIVA (permite bajar ambas alternando)
+      const pdf = await generatePDF(d, r, dolar, s);
+      setPreparedPdf({ ...pdf, signature:pdfSignature });
     } catch (e) {
       alert("No se pudo generar el PDF. Probá de nuevo en un momento.");
     }
@@ -1327,14 +1163,9 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
                 <p style={{ fontWeight:900, fontSize:16.5, color: on ? "white" : "#15233b", marginTop:3 }}>{USD(m.r.totalGen)}</p>
               </button>
             ); })}
-            {dhlDisabled && (
-              <div style={{ padding:"14px 10px 12px", borderRadius:14, border:"1px dashed #cbd5e1", background:"#f8fafc", textAlign:"center" }}>
-                <p style={{ fontWeight:800, fontSize:12, color:"#94a3b8" }}>⚡ DHL Express</p>
-                <p style={{ fontSize:10.5, color:"#94a3b8", fontWeight:600, marginTop:3 }}>Disponible desde {dhlElig.min ?? 10} kg de peso facturable</p>
-              </div>
-            )}
           </div>
         )}
+        {d0.tipo === "barco" && !MODES.some(m => m.key === "air" || m.key === "dhl") && <p style={{fontSize:12,color:"#64748b",lineHeight:1.5,marginBottom:16}}>Para comparar con aéreo, completá o revisá las medidas de esa misma carga y su volumen.</p>}
         {sinMedidas && baseKey !== "air" && (
           <p style={{ fontSize:11, color:"#b45309", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:10, padding:"8px 12px", marginBottom:14 }}>
             ℹ️ Para el cálculo aéreo no se cargaron medidas: no se consideró el peso volumétrico. Agregalas en el formulario si el paquete es voluminoso.
@@ -1402,7 +1233,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
                 ? <><strong>Categoría seleccionada:</strong> {d.categoria} — derecho de importación <strong>{d.aiDutyRate}%</strong>. Verificar con despachante.</>
                 : d.dutyManual
                   ? <><strong>Arancel manual:</strong> Derecho de importación cargado por el cliente al <strong>{d.aiDutyRate}%</strong>.</>
-                  : <><strong>Análisis IA:</strong> Derecho de importación calculado al <strong>{d.aiDutyRate}%</strong> según tipo de producto detectado. Verificar con despachante.</>}
+                  : <><strong>Clasificación estimada:</strong> {d.aiSuggestion}<br />{d.tariffSource && <span>Fuente: {d.tariffSource}{d.tariffSourceDate ? ` · Base del ${d.tariffSourceDate.split("-").reverse().join("/")}` : ""}. </span>}Confirmar la posición exacta antes de operar.</>}
             </p>
           </div>
         )}
@@ -1428,7 +1259,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             <Row label={`Flete estimado para base aduanera (USD ${r.customsPerKg}/kg)`} usd={r.fleteBase} dolar={dolar}
               note="Se utiliza únicamente para estimar tributos y no es un cargo adicional." />
             <Row label="CIF (FOB + flete estimado + seguro)" usd={r.cif} dolar={dolar} hi />
-            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · IA" : ""))})`} usd={r.duty} dolar={dolar} />
+            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · estimado" : ""))})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
             <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
             <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
@@ -1475,14 +1306,14 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
               note={r.cif <= 400 ? "Valor aduanero ≤ USD 400 — Exento" : `${r.effectiveDutyPct}% sobre USD ${fmt(r.cif - 400)} de excedente`} />
             <Row label={`IVA (${s.vat}% sobre valor aduanero + derechos)`} usd={r.iva} dolar={dolar} />
           </>) : (<>
-            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · IA" : ""))})`} usd={r.duty} dolar={dolar} />
+            <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · estimado" : ""))})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
             <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
             <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
           </>)}
         </Card>
 
-        <Card icon="📊" title="Impuestos internos">
+        <Card icon="📊" title="Percepciones estimadas">
           {r.internalTaxes
             ? (<>
                 <Row label={`IVA adicional (${s.addVat}%)`} usd={r.addVat} dolar={dolar} />
@@ -1493,8 +1324,8 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
                 <p style={{ fontSize:32, marginBottom:8 }}>{r.isAir ? "✈️" : "🚢"}</p>
                 <p style={{ fontSize:13, color:"#64748b" }}>
                   {r.seaKg
-                    ? "En la modalidad marítima por kilo no se aplican impuestos internos (se calcula como el aéreo comercial)."
-                    : "Los impuestos internos no aplican para importación por avión."}
+                    ? "En la modalidad marítima por kilo no se aplican percepciones estimadas (se calcula como el aéreo comercial)."
+                    : "Esta estimación no suma percepciones en la modalidad aérea. Requiere revisión para la liquidación final."}
                 </p>
               </div>
           }
@@ -1536,7 +1367,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             ] : [
               ["📦", "Valor de tu mercadería", "FOB declarado según factura del proveedor", r.fob],
               [r.isAir ? "✈️" : "🚢", "Transporte internacional", "Flete y seguro desde origen hasta Argentina", r.flete + r.seguro],
-              ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA e impuestos internos" : (r.isPersonal ? "Derechos de importación e IVA (régimen personal)" : "Derechos de importación, tasa estadística e IVA"), r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
+              ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA y percepciones estimadas" : (r.isPersonal ? "Derechos de importación e IVA (régimen personal)" : "Derechos de importación, tasa estadística e IVA"), r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
               ["🚚", "Logística puerta a puerta", "Retiro en origen, handling y envío nacional", r.pickup + r.handling + r.domestic],
               ["🤝", "Gestión FVR", "Seguimiento y coordinación integral de tu importación", r.fees],
             ]).map(([icon, label, desc, val]) => (
@@ -1613,9 +1444,14 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             <button onClick={onBack}
               style={{ padding:"14px 0", borderRadius:14, border:"2px solid #e2e8f0",
                 background:"white", color:"#475569", fontSize:14, fontWeight:700, cursor:"pointer" }}>
-              ← Nueva consulta
+              ← Editar consulta
             </button>
           </div>
+          {preparedPdf?.signature === pdfSignature && navigator.canShare?.({files:[preparedPdf.file]}) && (
+            <button onClick={sharePdf} style={{width:"100%",marginTop:12,padding:14,borderRadius:14,border:"1px solid #16a34a",background:"#f0fdf4",color:"#166534",fontWeight:800,cursor:"pointer"}}>
+              Compartir PDF
+            </button>
+          )}
           {hayComparador && (
             <p style={{ textAlign:"center", fontSize:11, color:"#94a3b8", marginTop:8 }}>
               💡 Cambiá de modalidad arriba y descargá el PDF de cada una — sin volver a cargar los datos.
@@ -2539,6 +2375,7 @@ export default function App() {
   // la cotización se guarda al calcular, con dedup de recálculos (<15 min).
   const handleCalculate = (d, r) => {
     setFormData(d); setResults(r); setView("results"); track("generated");
+    window.scrollTo(0, 0);
     const nueva = { id:uid(), date:new Date().toISOString(), client:d.nombre, whatsapp:d.whatsapp, email:d.email, product:d.producto, hsCode:d.hsCode, importType:d.tipo, formData:d, results:r, status:"nuevo" };
     const prev = quotes[0];
     const esRecalculo = prev && prev.status === "nuevo"
@@ -2573,6 +2410,13 @@ export default function App() {
 
   if (view === "admin-login") return <AdminLogin onLogin={() => { setAdminAuth(true); setView("admin"); }} onBack={() => setView("calc")} />;
   if (view === "admin" && adminAuth) return <AdminPanel settings={settings} settingsSync={settingsSync} refreshSettings={refreshSettings} saveSettings={saveSettings} quotes={quotes} updateQuoteStatus={updateStatus} metrics={metrics} dolar={dolar} fetchDolar={fetchDolar} onLogout={() => { setAdminAuth(false); setView("calc"); }} />;
-  if (view === "results" && results) return <ResultsView formData={formData} results={results} dolar={dolar} settings={settings} onBack={() => setView("calc")} onWhatsApp={handleWhatsApp} />;
-  return <CalculatorForm settings={settings} onCalculate={handleCalculate} onAdminClick={() => setView("admin-login")} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoad} onRefresh={fetchDolar} onTrackStarted={() => track("started")} />;
+  // El formulario sigue montado mientras se ven los resultados: conserva
+  // todos los campos, bultos, análisis y archivos seleccionados en esta consulta.
+  return <>
+    <div hidden={view === "results" && !!results}>
+      <CalculatorForm settings={settings} onCalculate={handleCalculate} onAdminClick={() => setView("admin-login")} dolar={dolar} dolarErr={dolarErr} dolarLoading={dolarLoad} onRefresh={fetchDolar} onTrackStarted={() => track("started")} />
+    </div>
+    {view === "results" && results && <ResultsView formData={formData} results={results} dolar={dolar} settings={settings}
+      onBack={() => { setView("calc"); window.scrollTo(0, 0); }} onWhatsApp={handleWhatsApp} />}
+  </>;
 }

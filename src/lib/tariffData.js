@@ -237,7 +237,7 @@ export const KEYWORD_RULES = [
   { k:["impresora","printer","plotter"], hs:"8443.31.10", rate:14, desc:"Impresora" },
   { k:["scanner","escaner"], hs:"8443.31.90", rate:14, desc:"Escáner" },
   // Communications (0%)
-  { k:["celular","smartphone","iphone","telefono inteligente","android","samsung galaxy","telefono movil"], hs:"8517.12.20", rate:0, desc:"Teléfono celular inteligente" },
+  { k:["celular","smartphone","iphone","telefono inteligente","android","samsung galaxy","telefono movil"], hs:"8517.13.00", rate:0, desc:"Teléfono celular inteligente" },
   { k:["router","modem","wifi"], hs:"8517.62.41", rate:0, desc:"Equipo de red y comunicaciones" },
   // Audio/Video
   { k:["auricular","audifonos","headphone","earphone","airpod","auriculares inalambricos","in ear"], hs:"8518.30.00", rate:20, desc:"Auriculares" },
@@ -305,7 +305,9 @@ export const KEYWORD_RULES = [
   { k:["electrodomestico","appliance"], hs:"8516.60.90", rate:18, desc:"Electrodoméstico" },
   // Tools
   { k:["taladro","drill","amoladora","sierra electrica","sierra circular"], hs:"8467.21.00", rate:12, desc:"Herramientas eléctricas" },
-  { k:["herramienta manual","destornillador","llave inglesa","pinza","alicate","martillo"], hs:"8205.59.00", rate:12, desc:"Herramientas manuales" },
+  { k:["martillo","maza"], not:["neumatico","electrico","hidraulico"], hs:"8205.20.00", rate:18, desc:"Martillos y mazas de mano", specific:true },
+  { k:["destornillador"], not:["neumatico","electrico","inalambrico"], hs:"8205.40.00", rate:18, desc:"Destornilladores de mano", specific:true },
+  { k:["alicate"], not:["quirurgico","medico","electrico","neumatico"], hs:"8203.20.10", rate:18, desc:"Alicates de mano (incluso cortantes)", specific:true },
   // Books & printed matter (0%)
   { k:["libro","novela","manual tecnico","enciclopedia","libro de texto"], hs:"4901.99.00", rate:0, desc:"Libros" },
   // Bags & luggage

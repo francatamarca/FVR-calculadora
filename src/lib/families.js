@@ -55,13 +55,7 @@ const median = (arr) => {
 /* Arancel efectivo de una posición: replica el orden de capas del motor
    (excepción argentina → Dec. 236/2025 → TEC oficial) para que la
    estimación de familia nunca use un AEC que Argentina no aplica. */
-const effectiveRate = (code8) => {
-  const ex = argExceptionFor(code8);
-  if (ex) return ex.rate;
-  const p2 = code8.slice(0, 2), p4 = code8.slice(0, 4);
-  if (DEC236.active && DEC236.chapters.has(p2) && NCM_RATES[p4] !== undefined) return NCM_RATES[p4];
-  return NCM8[code8];
-};
+const effectiveRate = (code8) => NCM8[code8];
 
 /* Estimado determinístico de la familia (mediana de posiciones vigentes). */
 export const familyEstimate = (family) => {
@@ -76,8 +70,12 @@ export const familyEstimate = (family) => {
 /* Detección de familia en el texto del cliente (palabra completa). */
 export const detectFamily = (text) => {
   const tokens = tokenize(text);
+  let best = null, bestScore = 0;
   for (const fam of FAMILIES) {
-    if (fam.terms.some((t) => phraseMatch(tokens, t))) return fam;
+    for (const term of fam.terms) {
+      const score = tokenize(term).length;
+      if (score > bestScore && phraseMatch(tokens, term)) { best=fam; bestScore=score; }
+    }
   }
-  return null;
+  return best;
 };

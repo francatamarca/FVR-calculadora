@@ -9,7 +9,8 @@ import { REMOTE_CPS, REMOTE_META } from "../data/dhlRemoteZones.js";
 export const normalizeCP = (raw) => {
   const original = (raw ?? "").toString();
   const clean = original.toUpperCase().replace(/\s+/g, "");
-  const m = clean.match(/(\d{4})/); // parte numérica del CPA
+  const valid = /^(?:\d{4}|[A-HJ-NP-Z]\d{4}(?:[A-Z]{3})?)$/.test(clean);
+  const m = valid ? clean.match(/(\d{4})/) : null; // parte numérica del CPA
   return { original, clean, num: m ? m[1] : null };
 };
 

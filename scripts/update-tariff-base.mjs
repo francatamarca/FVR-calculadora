@@ -56,7 +56,7 @@ async function download() {
     return readFileSync(OFFLINE_ZIP);
   }
   log(`→ Descargando ${URL_ZIP} …`);
-  const res = await fetch(URL_ZIP, { headers: { "User-Agent": UA } });
+  const res = await fetch(URL_ZIP, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) });
   if (!res.ok) die(`La fuente ARCA respondió ${res.status} — se CONSERVA la base actual (no se toca nada).`);
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 200_000) die(`Archivo sospechosamente chico (${buf.length} bytes) — se conserva la base actual.`);
@@ -164,6 +164,7 @@ const genNcm8 = (base, meta) => {
    Actualizar con: node scripts/update-tariff-base.mjs */
 
 export const NCM8 = {${rates}};
+export const NCM_MIXED = ${JSON.stringify(Object.fromEntries(Object.entries(base).filter(([,v]) => v.mixed).map(([c,v]) => [c,v.rates])))};
 
 /* BIT_SET: reservado para marcar posiciones informática/telecom (fuente
    POLCOM). Con la base DIE consolidada el 0% BIT ya viene aplicado, así
@@ -208,6 +209,9 @@ const buf = await download();
 const checksum = createHash("sha256").update(buf).digest("hex");
 const { base, fileDate, mixed } = parse(buf);
 const meta = { fileDate, checksum, downloadedAt: new Date().toISOString() };
+const previousMeta = existsSync(OUT_BASE) ? JSON.parse(readFileSync(OUT_BASE, "utf8")).meta : null;
+if (!/^\d{4}-\d{2}-\d{2}$/.test(fileDate) || !Number.isFinite(Date.parse(fileDate)) || fileDate > new Date().toISOString().slice(0,10)) die("Fecha de fuente inválida o futura: se conserva la base.");
+if (previousMeta?.fileDate && fileDate < previousMeta.fileDate) die("La fuente retrocedió de fecha: se conserva la base.");
 
 log(`→ Nomenclador del ${fileDate}: ${Object.keys(base).length} posiciones NCM (${mixed} con DIE mixto entre sufijos SIM)`);
 

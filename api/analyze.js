@@ -24,7 +24,13 @@ import { buildIndex } from "../src/lib/ncmSearch.js";
 import { NCM_DESC, NCM_DESC_META } from "../src/data/ncmDescriptions.js";
 import { NCM8 } from "../src/data/ncm8.js";
 
-const send = (res, flat) => res.status(200).json({ content: [{ text: JSON.stringify(flat) }] });
+const send = (res, flat) => {
+  const ageDays = Math.floor((Date.now() - Date.parse(TARIFF_SOURCE.date)) / 86400000);
+  const value = { ...flat, baseDate:TARIFF_SOURCE.date,
+    sourceUrl:"https://www.afip.gob.ar/aduana/arancelintegrado/",
+    warnings:[...(flat.warnings || []), ...(ageDays > 7 ? ["La base oficial disponible tiene más de 7 días. Su vigencia requiere confirmación."] : [])] };
+  return res.status(200).json({ content:[{text:JSON.stringify(value)}] });
+};
 
 // Índice BM25 sobre descripciones oficiales — se construye una vez por
 // instancia (cold start) y se reusa entre invocaciones calientes.
@@ -125,15 +131,23 @@ export default async function handler(req, res) {
 
   // ── HS/NCM: resolución 100% local, con precisión por dígitos ──
   if (type === "hsCode") {
+    const digits = value.replace(/[.\s]/g, "");
+    if (!/^(\d{4}|\d{6}|\d{8})$/.test(digits)) return send(res, { dutyRate:null, error:"Usá una partida de 4, HS de 6 o NCM de 8 dígitos", requiresManualValidation:true });
+    if (digits.length === 8 && NCM8[digits] === undefined) return send(res, { dutyRate:null, error:"El NCM no existe en la base oficial disponible", requiresManualValidation:true });
     const flat = toLegacyShape(classifyCode(value));
     const c8 = value.replace(/[^0-9]/g, "").slice(0, 8);
-    if (NCM_DESC[c8]) flat.officialDesc = NCM_DESC[c8];
+    if (NCM_DESC[c8]) { flat.officialDesc = NCM_DESC[c8]; flat.description = NCM_DESC[c8].split(" — ")[0]; }
     flat.baseDate = NCM_DESC_META.date || TARIFF_SOURCE.date;
     return send(res, flat);
   }
 
   // ── Producto: jerarquía local + candidatos reales + IA restringida ──
   const localFlat = toLegacyShape(classifyProduct(value));
+  if (localFlat.specific) {
+    localFlat.officialDesc = NCM_DESC[localFlat.hsCode.replace(/\D/g, "")] || "";
+    localFlat.method = "regla-especifica-validada";
+    return send(res, localFlat);
+  }
   const candidates = buildCandidates(value, localFlat);
   localFlat.baseDate = NCM_DESC_META.date || TARIFF_SOURCE.date;
   localFlat.method = "local";
@@ -187,7 +201,7 @@ Respondé ÚNICAMENTE JSON sin markdown:
         flat.hsCode = fmtCode(chosen.code8);
         flat.description = chosen.desc || flat.description;
         flat.officialDesc = NCM_DESC[chosen.code8] || chosen.desc || "";
-        flat.confidence = parsed.confianza === "alta" ? "alta" : parsed.confianza === "baja" ? "baja" : "media";
+        flat.confidence = flat.warnings.some(w => /apertura SIM/.test(w)) ? "media" : parsed.confianza === "alta" ? "alta" : parsed.confianza === "baja" ? "baja" : "media";
         flat.method = "ia-candidatos";
         flat.baseDate = NCM_DESC_META.date || TARIFF_SOURCE.date;
         flat.source = `Clasificación IA entre ${candidates.length} posiciones oficiales + arancel de ${TARIFF_SOURCE.shortName}`;

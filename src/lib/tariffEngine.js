@@ -1,32 +1,12 @@
-/* ── MOTOR ARANCELARIO FVR v2 ───────────────────────────────
-   Única fuente de verdad para derechos de importación (DIE extrazona).
-   Regla central: la IA puede INTERPRETAR productos y ELEGIR entre
-   candidatos REALES, pero el % de derecho SIEMPRE sale de la base
-   local (TEC oficial + excepciones argentinas verificadas).
-   NUNCA de texto libre de un modelo.
-
-   ORDEN DE CAPAS (Fase 7 — gana la primera que matchee):
-     1. Excepciones argentinas verificadas (src/data/argExceptions.js)
-     2. Dec. 236/2025 textil/calzado (tabla argentina auditada)
-     3. TEC/AEC oficial a 8 dígitos (10.515 posiciones)
-     4. Tabla interna auditada por partida (4 dígitos)
-     5. Promedio del capítulo (muy referencial)
-   Una tabla de 4 dígitos NUNCA pisa una posición oficial de 8 dígitos:
-   la capa 4 solo actúa cuando el código no llega a 8 dígitos o la
-   posición no existe en la base oficial.
-
-   Por DESCRIPCIÓN (Fase 5 — jerarquía):
-     1. Regla exacta por PALABRA COMPLETA (sin substring: "control
-        remoto" ya no matchea "moto") con guards negativos.
-        El % del match se re-resuelve contra classifyCode (base oficial).
-     2. Familia comercial → estimación determinística (mediana de las
-        posiciones oficiales de la familia) — ver src/lib/families.js.
-     3. Genérico 16% (última alternativa, requiere validación manual).
-
-   Para actualizar la base: scripts/update-tariff-base.mjs (pipeline). */
+/* Motor arancelario FVR.
+   Para NCM existentes prevalece el DIE del Arancel Integrado ARCA.
+   Los códigos incompletos y las familias usan estimaciones derivadas
+   de esa misma base; nunca se presentan como posiciones exactas.
+   La IA interpreta la descripción y no genera porcentajes.
+   Actualización: scripts/update-tariff-base.mjs + workflow tariff-update. */
 
 import { NCM_RATES, CHAPTER_DESC, CHAPTER_RATES, KEYWORD_RULES } from "./tariffData.js";
-import { NCM8, BIT_SET } from "../data/ncm8.js";
+import { NCM8, BIT_SET, NCM_MIXED } from "../data/ncm8.js";
 import { argExceptionFor, DEC236, ARG_EXCEPTIONS_META } from "../data/argExceptions.js";
 import { tokenize, phraseMatch } from "./textNorm.js";
 import { detectFamily, familyEstimate } from "./families.js";
@@ -103,6 +83,47 @@ export function classifyCode(raw) {
   const prec = precisionFor(digits.length);
   const descCap = CHAPTER_DESC[p2] ? `Mercadería del capítulo ${p2}: ${CHAPTER_DESC[p2]}` : "Mercadería clasificada en el NCM";
 
+  // ── CAPA 3: DIE argentino oficial a 8 dígitos (Arancel Integrado ARCA,
+  //    consolidado con toda la normativa vigente — ver scripts/update-tariff-base.mjs) ──
+  if (digits.length >= 8 && NCM8[p8] !== undefined) {
+    const esBIT = BIT_SET.has(p8);
+    result.productDescription = descCap;
+    result.candidates.push(baseCandidate({
+      code: String(raw), description: descCap, dutyRate: NCM8[p8],
+      precision: "NCM_8_OFICIAL", precisionLabel: "NCM 8 dígitos · DIE oficial ARCA",
+      confidence: NCM_MIXED[p8] ? "medium" : "high",
+      source: "DIE oficial ARCA (Arancel Integrado, TEC/AEC + normativa argentina consolidada)",
+      warnings: NCM_MIXED[p8] ? [`El arancel depende de la apertura SIM: ${NCM_MIXED[p8].join("%, ")}% posibles. Se muestra una referencia; confirmar el sufijo exacto.`] : esBIT && NCM8[p8] > 0
+        ? ["Posición del régimen de informática/telecom (BIT): Argentina suele aplicar 0% — verificar la excepción vigente."]
+        : [],
+    }));
+    result.selected = result.candidates[0];
+    return result;
+  }
+
+  if (digits.length === 4 || digits.length === 6) {
+    const positions = Object.keys(NCM8).filter(c => c.startsWith(digits));
+    if (positions.length) {
+      const rates = positions.map(c => NCM8[c]).sort((a,b)=>a-b);
+      const middle = Math.floor(rates.length/2);
+      const reference = rates.length % 2 ? rates[middle] : (rates[middle-1]+rates[middle])/2;
+      result.candidates.push(baseCandidate({code:String(raw),description:descCap,dutyRate:reference,
+        precision:prec.precision,precisionLabel:prec.label,confidence:"medium",
+        source:`Mediana de ${positions.length} posiciones oficiales ARCA`,
+        warnings:[...prec.warnings,"Estimación referencial por código incompleto; indicá el NCM de 8 dígitos y su apertura SIM."]}));
+      result.selected=result.candidates[0];
+    }
+    result.requiresManualValidation=true;
+    return result;
+  }
+
+  // Un código NCM inexistente nunca debe convertirse en un porcentaje
+  // estimado por capítulo conservando apariencia de código exacto.
+  if (digits.length >= 8) {
+    result.requiresManualValidation = true;
+    return result;
+  }
+
   // ── CAPA 1: excepciones nacionales argentinas verificadas ──
   const ov = argExceptionFor(digits);
   if (ov) {
@@ -127,24 +148,6 @@ export function classifyCode(raw) {
       precision: prec.precision, precisionLabel: prec.label, confidence: digits.length >= 8 ? "high" : prec.confidence,
       source: "Dec. 236/2025 (excepción argentina textil/calzado)", norma: DEC236.norma,
       warnings: [DEC236.motivo, ...prec.warnings],
-    }));
-    result.selected = result.candidates[0];
-    return result;
-  }
-
-  // ── CAPA 3: DIE argentino oficial a 8 dígitos (Arancel Integrado ARCA,
-  //    consolidado con toda la normativa vigente — ver scripts/update-tariff-base.mjs) ──
-  if (digits.length >= 8 && NCM8[p8] !== undefined) {
-    const esBIT = BIT_SET.has(p8);
-    result.productDescription = descCap;
-    result.candidates.push(baseCandidate({
-      code: String(raw), description: descCap, dutyRate: NCM8[p8],
-      precision: "NCM_8_OFICIAL", precisionLabel: "NCM 8 dígitos · DIE oficial ARCA",
-      confidence: "high",
-      source: "DIE oficial ARCA (Arancel Integrado, TEC/AEC + normativa argentina consolidada)",
-      warnings: esBIT && NCM8[p8] > 0
-        ? ["Posición del régimen de informática/telecom (BIT): Argentina suele aplicar 0% — verificar la excepción vigente."]
-        : [],
     }));
     result.selected = result.candidates[0];
     return result;
@@ -217,23 +220,23 @@ export function classifyProduct(text) {
 
   // ── NIVEL 1: regla exacta (EXTRA_RULES primero: más específicas) ──
   const rule = matchRule(tokens, [...EXTRA_RULES, ...KEYWORD_RULES]);
-  if (rule) {
+  if (rule && classifyCode(rule.hs).selected) {
     // El % se re-resuelve contra la base oficial/excepciones para el NCM de la
     // regla; el rate manual queda como fallback si la posición no existe.
     const official = classifyCode(rule.hs);
     const oc = official.selected;
-    const useOfficial = oc && (oc.precision === "NCM_8_OFICIAL" || oc.source === "Excepción nacional argentina" || (oc.source || "").startsWith("Dec. 236"));
+    const useOfficial = !!oc;
     result.productDescription = rule.desc;
     result.normalizedCode = clean(rule.hs);
     result.candidates.push(baseCandidate({
       code: rule.hs,
       description: rule.desc,
       dutyRate: useOfficial ? oc.dutyRate : rule.rate,
-      precision: "KEYWORD_MATCH",
+      precision: "KEYWORD_MATCH", specific:!!rule.specific,
       precisionLabel: "Detección por tipo de producto (referencial)",
       confidence: "medium",
       source: useOfficial ? oc.source : TARIFF_SOURCE.shortName,
-      warnings: ["Clasificación por descripción: confirmar la posición NCM exacta antes de operar."],
+      warnings: [...(oc?.warnings || []), "Clasificación por descripción: confirmar la posición NCM exacta antes de operar."],
     }));
     result.selected = result.candidates[0];
     return result;
@@ -287,11 +290,11 @@ export function toLegacyShape(engineResult) {
   const c = engineResult.selected || {};
   return {
     hsCode: c.code || engineResult.input || "—",
-    dutyRate: typeof c.dutyRate === "number" ? c.dutyRate : 16,
+    dutyRate: typeof c.dutyRate === "number" ? c.dutyRate : null,
     description: c.description || engineResult.productDescription || "",
     confidence: c.confidence === "high" ? "alta" : c.confidence === "low" ? "baja" : "media",
     precision: c.precision || "GENERIC_FALLBACK",
-    precisionLabel: c.precisionLabel || "",
+    precisionLabel: c.precisionLabel || "", specific:!!c.specific,
     dutyType: c.dutyType || TARIFF_SOURCE.dutyType,
     source: c.source || TARIFF_SOURCE.shortName,
     sourceDate: c.sourceDate || TARIFF_SOURCE.date,

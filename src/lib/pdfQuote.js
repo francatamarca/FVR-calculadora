@@ -12,6 +12,7 @@
    - Todo en UNA página A4. */
 
 import { deliveryEstimate } from "./dhlZones.js";
+import { QUOTE_LOGO } from "../data/quoteLogo.js";
 
 const fmt = (n, dec = 2) =>
   new Intl.NumberFormat("es-AR", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(+n || 0);
@@ -24,6 +25,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const autoTable = autoTableMod.default || autoTableMod.autoTable;
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  doc.setProperties({title:`Presupuesto FVR — ${d.producto || "Importación"}`, author:"FVR Logística Internacional", subject:"Cotización de importación", creator:"FVR Logística Internacional"});
   const W = doc.internal.pageSize.getWidth();
   const M = 14;
   const navy = [11, 47, 82], blue = [24, 84, 138], orange = [242, 108, 30], ink = [21, 35, 59], gray = [100, 116, 139], line = [230, 235, 242];
@@ -35,22 +37,14 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
   const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-  const dutySuffix = d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · IA" : ""));
+  const dutySuffix = d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
   const tipo = r.isDhl ? "DHL Express · Envío Comercial"
     : d.tipo === "avion"
       ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
       : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
   const del = r.isDhl ? deliveryEstimate(d.cp, s) : null;
 
-  // Logo (dataURL) — desde el navegador; en Node se pasa por opts o cae al texto "FVR"
-  let logoData = opts.logoDataUrl || null;
-  if (!logoData && typeof window !== "undefined") {
-    try {
-      logoData = await fetch("/logo-fvr.jpg").then(res => res.blob()).then(b => new Promise((ok, no) => {
-        const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(b);
-      }));
-    } catch {}
-  }
+  const logoData = opts.logoDataUrl || QUOTE_LOGO;
   if (!dolar && typeof window !== "undefined") {
     try {
       const dj = await fetch("https://criptoya.com/api/dolar").then(res => res.json());
@@ -246,6 +240,11 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
     cursorY += 4;
   }
 
+  if (d.tariffSourceDate && !d.dutyManual) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6.8); doc.setTextColor(...gray);
+    doc.text(`Clasificación probable. Base DIE ARCA del ${d.tariffSourceDate.split("-").reverse().join("/")}. Confirmar NCM y apertura SIM.`, M, cursorY);
+    cursorY += 4;
+  }
   /* ── Legal + footer ── */
   doc.setTextColor(...gray); doc.setFont("helvetica", "italic"); doc.setFontSize(6.8);
   const legalLines = doc.splitTextToSize(s.legal || "", W - 2 * M);

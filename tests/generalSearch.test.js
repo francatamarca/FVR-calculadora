@@ -1,5 +1,5 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
-import {classifyPublicProduct,localSearch,clearProductCache,isProductCode} from '../src/lib/productClassifier.js';
+import {classifyPublicProduct,localSearch,clearProductCache,isProductCode,explicitContradiction} from '../src/lib/productClassifier.js';
 import {genericEstimate,classificationPatch} from '../src/lib/searchPolicy.js';
 import {classifyCode,toLegacyShape} from '../src/lib/tariffEngine.js';
 import {NCM8} from '../src/data/ncm8.js';
@@ -45,7 +45,7 @@ function semanticFixture(query,object,search,target,{reject=false}={}) {
     if(stage==='interpretar_producto')return toolResponse(stage,{identificado:true,nombre:query,objeto:object,funcion:'Uso comercial descrito',presentacion:'completo',consultas:[search],partidas:[target.slice(0,4)],faltantes:[]});
     const found=context.candidatos.find(c=>c.ncm.replace(/\D/g,'')===target);
     expect(found,`La recuperación debe incluir ${target} para ${query}`).toBeTruthy();
-    return toolResponse(stage,{pregunta:'Confirmá si esta variante describe tu producto.',confianza:'media',refinamientos:[],opciones:reject?[]:[{indice:found.indice,nombre:query,detalle:'Variante compatible según las características indicadas',dutyRate:99}]});
+    return toolResponse(stage,{pregunta:'Confirmá si esta variante describe tu producto.',confianza:'media',refinamientos:[],opciones:reject?[]:[{indice:found.indice,nombre:query,detalle:'Variante compatible según las características indicadas',compatibleConDescripcion:true,atributosContradictorios:[],dutyRate:99}]});
   });
 }
 it.each(samples)('recuperación general de catálogo: %s',async(query,object,search,target)=>{
@@ -180,4 +180,45 @@ it('el contexto de una posición residual conserva las ramas específicas exclui
   const residual=ctx.candidatos.find(c=>c.ncm==='8471.30.90');
   expect(residual.otrasRamasEspecificas).toContain('8471301');
   expect(ctx.ramasOficiales['8471301']).toContain('sin fuente externa');
+});
+
+it.each([
+  ['notebook portátil con batería','Notebook sin batería autónoma'],
+  ['bicicleta sin motor','Bicicleta con motor eléctrico'],
+  ['silla sin tapizado','Silla con tapizado de tela'],
+  ['caja que no incluye herramientas','Caja con herramientas'],
+])('rechaza contradicciones explícitas de cualquier rubro: %s', (query,option)=>{
+  expect(explicitContradiction(query,option)).toBe(true);
+});
+it('no confunde una coincidencia positiva o un atributo no informado con contradicción',()=>{
+  expect(explicitContradiction('silla con tapizado','Silla con tapizado de tela')).toBe(false);
+  expect(explicitContradiction('caja de herramientas','Caja con herramientas')).toBe(false);
+});
+it('el servidor descarta una opción aunque el modelo la haya aprobado si contradice un atributo explícito',async()=>{
+  const base=semanticFixture('notebook con batería','computadora','maquinas portatiles','84713090');
+  vi.stubGlobal('fetch',vi.fn(async(url,req)=>{
+    const response=await base(url,req),body=JSON.parse(req.body);
+    if(!JSON.parse(body.contents[0].parts[0].text).candidatos)return response;
+    const payload=await response.json(),v=JSON.parse(payload.candidates[0].content.parts[0].text);
+    v.opciones[0].nombre='Notebook sin batería autónoma';
+    return toolResponse('validar_variantes',v);
+  }));
+  const r=await classifyPublicProduct('notebook con batería',{apiKey:'test'});
+  expect(r.isGeneric).toBe(true);expect(r.dutyRate).toBe(20);
+});
+it('una opción sin validación explícita o con atributos contradictorios no se ofrece al cliente',async()=>{
+  for(const state of ['missing','contradiction']) {
+    clearProductCache();
+    const base=semanticFixture('mesa de metal','mueble','muebles metal','94032090');
+    vi.stubGlobal('fetch',vi.fn(async(url,req)=>{
+      const response=await base(url,req);
+      if(!JSON.parse(JSON.parse(req.body).contents[0].parts[0].text).candidatos)return response;
+      const payload=await response.json(),v=JSON.parse(payload.candidates[0].content.parts[0].text);
+      if(state==='missing')delete v.opciones[0].compatibleConDescripcion;
+      else v.opciones[0].atributosContradictorios=['material distinto'];
+      return toolResponse('validar_variantes',v);
+    }));
+    const r=await classifyPublicProduct('mesa de metal',{apiKey:'test'});
+    expect(r.alternatives).toEqual([]);expect(r.dutyRate).toBe(20);
+  }
 });

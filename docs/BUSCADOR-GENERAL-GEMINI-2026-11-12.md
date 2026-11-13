@@ -105,3 +105,38 @@ verifican el contrato y recuperación; no miden la precisión real del modelo.
 La evaluación real es una muestra de productos, no cubre todo el universo NCM.
 La confirmación del cliente es orientativa y la clasificación debe validarse
 antes de operar, especialmente en productos complejos o regulados.
+
+## Cierre de revisión — 13/11/2026
+
+La tarea automática de ARCA se ejecutó sin intervención y publicó la base del
+13/11 en main (833b45c). Se incorporó esa actualización a la rama de revisión
+y se regeneró el catálogo con el esquema nuevo, conservando las aperturas SIM
+y el descarte de encabezados de capítulos. Frente a la base del 12/11 no hubo
+cambios de aranceles ni descripciones de productos; cambió la fecha y checksum.
+
+La regeneración volvió a aprobar 260 pruebas. La última revisión real de
+Gemini registró ocho búsquedas, incluida una respuesta de seguimiento:
+
+- bomba de agua.
+- silla de madera.
+- caja de herramientas.
+- caja de herramientas de plástico (respuesta elegida).
+- moto de agua.
+- notebook portátil con batería.
+- xyzzy frobnicator.
+- mesa de metal para comedor (Enter).
+
+Se confirmó que el refinamiento completa la descripción y vuelve a buscar;
+Enter ejecuta el análisis; un producto no identificado permite continuar
+con el 20% FVR; la opción incompatible sin batería no se muestra para una
+notebook con batería. En celular no se observó desborde horizontal
+(375 px de contenido dentro de 375 px disponibles); tampoco en computadora
+(1265 px de contenido dentro de 1265 px).
+
+Límites observados en el proyecto gratuito al verificarlo: 15 llamadas/minuto,
+500 llamadas/día y 250000 tokens de entrada/minuto. Cada análisis nuevo puede
+usar dos llamadas; no equivale a 500 búsquedas nuevas completas por día.
+Google puede modificar la cuota. No se activó facturación ni un respaldo pago.
+
+La vista previa probada se conserva para revisión; la publicación de esta
+versión en el dominio de clientes sigue pendiente de aprobación de Francisco.

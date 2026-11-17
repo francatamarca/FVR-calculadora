@@ -39,7 +39,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const validez = `${String(venc.getDate()).padStart(2, "0")}/${String(venc.getMonth() + 1).padStart(2, "0")}/${venc.getFullYear()}`;
   const presNro = `FVR-${now.getFullYear()}${mm}${dd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-  const dutySuffix = d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
+  const dutySuffix = d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : "");
   const tipo = r.isDhl ? "DHL Express · Envío Comercial"
     : d.tipo === "avion"
       ? "Avión · Envío Comercial"

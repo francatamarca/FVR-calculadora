@@ -158,8 +158,6 @@ const buildShortSummary = (d, r, rate, s = {}) => {
 };
 
 /* ── PDF REAL (vectorial, jsPDF) ─────────────────────────── */
-const dutySuffix = (d) => d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
-
 const generatePDF = async (d, r, dolar, s, opts = {}) => {
   // Layout en src/lib/pdfQuote.js (renderizable también desde Node para revisarlo)
   const { buildQuotePDF } = await import("./lib/pdfQuote.js");

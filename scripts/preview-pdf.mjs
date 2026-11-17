@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Renderiza PDFs de muestra del presupuesto (aéreo y DHL) para revisar el
+/* Renderiza PDFs de muestra (aéreo comercial, DHL y marítimo m³) para revisar el
    diseño sin abrir el navegador:  node scripts/preview-pdf.mjs [dirSalida] */
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,8 +26,6 @@ const base = {
 const casos = [
   { tag: "aereo", d: { ...base, tipo: "avion", subTipo: "comercial" } },
   { tag: "dhl",   d: { ...base, tipo: "dhl" } },
-  { tag: "personal", d: { ...base, tipo: "avion", subTipo: "personal", fob: "350" } },
-  { tag: "maritimo-kg", d: { ...base, tipo: "barco", seaMode: "kg" } },
   { tag: "maritimo-m3", d: { ...base, tipo: "barco", seaMode: "m3", m3manual: "1.5" } },
 ];
 

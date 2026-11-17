@@ -59,7 +59,7 @@ const buildWAMsg = (d, r, rate, s) => {
     return lines.filter(v => v !== undefined && v !== "").join("\n");
   }
   const tipo = d.tipo === "avion"
-    ? `Avion - ${d.subTipo === "personal" ? "Envio Personal (Franquicia)" : "Envio Comercial"}`
+    ? "Avion - Envio Comercial"
     : "Barco - Por m3";
   const lines = [
     "== PRESUPUESTO DE IMPORTACION ==",
@@ -83,12 +83,10 @@ const buildWAMsg = (d, r, rate, s) => {
     "Flete internacional: " + USD(r.flete),
     "Seguro (" + s.insurance + "%): " + USD(r.seguro),
     "CIF / Valor en aduana: " + USD(r.cif),
-    r.isPersonal
-      ? ("Derecho de importacion (" + r.effectiveDutyPct + "% s/excedente USD 400" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.tariffGeneric ? " - genérico FVR" : d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty))
-      : ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.tariffGeneric ? " - genérico FVR" : d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
-    r.isPersonal ? "Tasa estadistica: No aplica" : ("Tasa estadistica (" + s.stat + "%): " + USD(r.stat)),
-    r.isPersonal ? ("IVA (" + s.vat + "% s/CIF + derechos): " + USD(r.iva)) : ("IVA (" + s.vat + "%): " + USD(r.iva)),
-    ...(r.internalTaxes && !r.isPersonal
+    ("Derecho de importacion (" + r.effectiveDutyPct + "%" + (d.categoria ? " - cat. " + d.categoria : (d.dutyManual ? " - manual" : (d.tariffGeneric ? " - genérico FVR" : d.aiDutyRate !== null ? " - via IA" : ""))) + "): " + USD(r.duty)),
+    "Tasa estadistica (" + s.stat + "%): " + USD(r.stat),
+    "IVA (" + s.vat + "%): " + USD(r.iva),
+    ...(r.internalTaxes
       ? [
           "IVA adicional (" + s.addVat + "%): " + USD(r.addVat),
           "Ganancias (" + s.gains + "%): " + USD(r.gains),
@@ -140,7 +138,7 @@ const buildShortSummary = (d, r, rate, s = {}) => {
     ].filter(v => v !== null && v !== undefined).join("\n");
   }
   const tipo = d.tipo === "avion"
-    ? (d.subTipo === "personal" ? "Aéreo (envío personal)" : "Aéreo")
+    ? "Aéreo comercial"
     : "Marítimo por m³";
   const lines = [
     `*Cotización de importación — FVR Logística*`,
@@ -310,29 +308,6 @@ const TypeSel = ({ value, onChange }) => (
         <span style={{ fontWeight:700, fontSize:14, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
       </button>
     ))}
-  </div>
-);
-
-const SubTipoSel = ({ value, onChange }) => (
-  <div style={{ marginTop:16 }}>
-    <p style={{ fontSize:11, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>Tipo de envío</p>
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-      {[{ v:"comercial", icon:"🏢", label:"Envío Comercial" }, { v:"personal", icon:"👤", label:"Envío Personal" }].map(({ v, icon, label }) => (
-        <button key={v} onClick={() => onChange(v)} type="button"
-          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#18548a":"#e2e8f0"}`,
-            background: value===v ? "#eef5fb" : "#f8fafc", cursor:"pointer",
-            display:"flex", alignItems:"center", gap:10,
-            boxShadow: value===v ? "0 2px 10px rgba(24,84,138,0.12)" : "none" }}>
-          <span style={{ fontSize:22 }}>{icon}</span>
-          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
-        </button>
-      ))}
-    </div>
-    {value === "personal" && (
-      <div style={{ marginTop:10, background:"#fffbeb", border:"1px solid #fde68a", borderRadius:12, padding:12, fontSize:12, color:"#92400e" }}>
-        <strong>🏷️ Franquicia personal:</strong> Exento de derechos de importación hasta USD 400 de valor aduanero. Sobre el excedente se aplica el <strong>arancel del producto según su HS code</strong>. Tasa estadística <strong>no aplica</strong>. IVA 21% sobre el valor aduanero + los derechos.
-      </div>
-    )}
   </div>
 );
 
@@ -1083,7 +1058,6 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
   // ── Modalidades conmutables (igual que la calculadora interna) ──
   // Con los mismos datos el cliente alterna entre aéreo comercial y marítimo
   // por m³, cuando hay volumen calculable (manual o medidas de los bultos).
-  const esPersonal = false;
   const volTotal = packTotals(d0).volCm3;
   const MODES = publicModes(d0, s);
   const baseKey = d0.tipo === "barco" ? "seaM3" : (MODES.some(m => m.key === "dhl") ? "dhl" : "air");
@@ -1186,19 +1160,6 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         </section>
         <div id="detalle-costos" style={{scrollMarginTop:20}} />
 
-        {r.isPersonal && (
-          <div style={{ background:"#fffbeb", border:"1px solid #fbbf24", borderRadius:14, padding:"12px 16px", marginBottom:16, display:"flex", gap:10 }}>
-            <span style={{ fontSize:20 }}>🏷️</span>
-            <div>
-              <p style={{ fontSize:13, fontWeight:700, color:"#92400e" }}>Franquicia de envío personal activa</p>
-              <p style={{ fontSize:12, color:"#b45309" }}>
-                {r.cif <= 400 ? "Valor aduanero ≤ USD 400 — Exento de derechos de importación." : `Excedente de USD 400: ${USD(r.cif - 400)}. Derechos al ${r.effectiveDutyPct}% (HS code) sobre el excedente.`}
-                {" "}Tasa estadística no aplica. IVA {s.vat}% sobre valor aduanero + derechos.
-              </p>
-            </div>
-          </div>
-        )}
-
         {d.aiDutyRate !== null && d.aiDutyRate !== undefined && (
           <div style={{ background:d.tariffGeneric ? "#fff8e9" : "#f0fdf4", border:`1px solid ${d.tariffGeneric ? "#ebd29b" : "#86efac"}`, borderRadius:14, padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
             <span style={{ fontSize:20 }}>{d.categoria ? "🏷️" : (d.dutyManual ? "✍️" : "🤖")}</span>
@@ -1275,16 +1236,10 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         </Card>
 
         <Card icon="🏛️" title="Tributos aduaneros">
-          {r.isPersonal ? (<>
-            <Row label={`Derecho de importación (${r.effectiveDutyPct}%)`} usd={r.duty} dolar={dolar}
-              note={r.cif <= 400 ? "Valor aduanero ≤ USD 400 — Exento" : `${r.effectiveDutyPct}% sobre USD ${fmt(r.cif - 400)} de excedente`} />
-            <Row label={`IVA (${s.vat}% sobre valor aduanero + derechos)`} usd={r.iva} dolar={dolar} />
-          </>) : (<>
             <Row label={`Derecho de importación (${r.effectiveDutyPct}%${d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null ? " · estimado" : ""))})`} usd={r.duty} dolar={dolar} />
             <Row label={`Tasa estadística (${s.stat}%)`} usd={r.stat} dolar={dolar} />
             <Row label="Base imponible IVA" usd={r.ivaBase} dolar={dolar} hi />
             <Row label={`IVA (${s.vat}%)`} usd={r.iva} dolar={dolar} />
-          </>)}
         </Card>
 
         <Card icon="📊" title="Percepciones estimadas">
@@ -1339,7 +1294,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             ] : [
               ["📦", "Valor de tu mercadería", "FOB declarado según factura del proveedor", r.fob],
               [r.isAir ? "✈️" : "🚢", "Transporte internacional", "Flete y seguro desde origen hasta Argentina", r.flete + r.seguro],
-              ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA y percepciones estimadas" : (r.isPersonal ? "Derechos de importación e IVA (régimen personal)" : "Derechos de importación, tasa estadística e IVA"), r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
+              ["🏛️", "Impuestos y tributos", r.internalTaxes ? "Derechos, tasa estadística, IVA y percepciones estimadas" : "Derechos de importación, tasa estadística e IVA", r.duty + r.stat + r.iva + r.addVat + r.gains + r.ib],
               ["🚚", "Logística puerta a puerta", "Retiro en origen, handling y envío nacional", r.pickup + r.handling + r.domestic],
               ["🤝", "Gestión FVR", "Seguimiento y coordinación integral de tu importación", r.fees],
             ]).map(([icon, label, desc, val]) => (
@@ -1476,7 +1431,6 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
           <div>
             <p style={{ fontWeight:700, fontSize:14, color:"#15233b" }}>{q.client}</p>
             <p style={{ fontSize:12, color:"#64748b" }}>{q.product} · {new Date(q.date).toLocaleDateString("es-AR")}</p>
-            {q.formData?.subTipo === "personal" && <span style={{ fontSize:11, background:"#fef3c7", color:"#92400e", padding:"2px 8px", borderRadius:99, fontWeight:700 }}>Envío personal</span>}
           </div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -1522,9 +1476,9 @@ const QuoteCard = ({ q, dolar, onStatusChange }) => {
                 <span style={{ color:"#64748b" }}>Seguro</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.seguro)}</span>
                 <span style={{ color:"#0f3d68", fontWeight:700 }}>CIF / Valor en aduana</span><span style={{ fontWeight:700, color:"#0f3d68", textAlign:"right" }}>{USD(r.cif)}</span>
                 <span style={{ color:"#64748b" }}>Derecho importación</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.duty)}</span>
-                {!r.isPersonal && <><span style={{ color:"#64748b" }}>Tasa estadística</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.stat)}</span></>}
+                <span style={{ color:"#64748b" }}>Tasa estadística</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.stat)}</span>
                 <span style={{ color:"#64748b" }}>IVA</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.iva)}</span>
-                {(r.internalTaxes ?? !r.isAir) && !r.isPersonal && <>
+                {(r.internalTaxes ?? !r.isAir) && <>
                   <span style={{ color:"#64748b" }}>IVA adicional</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.addVat)}</span>
                   <span style={{ color:"#64748b" }}>Ganancias</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.gains)}</span>
                   <span style={{ color:"#64748b" }}>Ingresos Brutos</span><span style={{ fontWeight:700, textAlign:"right" }}>{USD(r.ib)}</span>
@@ -1626,7 +1580,7 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
       return /[",;\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
     };
     const H = ["Fecha","Cliente","WhatsApp","Email","Producto","HS Code","Tipo","SubTipo","FOB","Total Envío","Total General","Estado"];
-    const R = quotes.map(q => [new Date(q.date).toISOString().slice(0,10),q.client,q.whatsapp,q.email,q.product,q.hsCode,q.importType,q.formData?.subTipo||"—",q.results?.fob,q.results?.totalLog,q.results?.totalGen,q.status]);
+    const R = quotes.map(q => [new Date(q.date).toISOString().slice(0,10),q.client,q.whatsapp,q.email,q.product,q.hsCode,q.importType,(q.formData?.subTipo && q.formData.subTipo !== "comercial" ? "Modalidad retirada" : "Comercial"),q.results?.fob,q.results?.totalLog,q.results?.totalGen,q.status]);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\uFEFF"+[H,...R].map(r=>r.map(cell).join(",")).join("\n")],{type:"text/csv;charset=utf-8;"}));
     a.download = "fvr_presupuestos.csv"; a.click();
@@ -1751,7 +1705,6 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
                 <SettingField s={s} setS={setS} label="🇺🇸 Estados Unidos" k="airRateUSA"/>
                 <SettingField s={s} setS={setS} label="🇨🇳 China" k="airRateChina"/>
-                <SettingField s={s} setS={setS} label="🇪🇸 España" k="airRateEspana"/>
                 <SettingField s={s} setS={setS} label="Base aduanera aérea (USD/kg)" k="airCustomsPerKg" min={0}/>
               </div>
               <p style={{ fontSize:11, color:"#64748b", marginTop:8 }}>La tarifa comercial se cobra por kg. La base aduanera aérea solo forma seguro, CIF y tributos; no se cobra como importe adicional. Cualquier otro país usa la tarifa de China.</p>
@@ -1914,7 +1867,7 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
 const OV_FIELDS = [
   ["duty", "Derecho importación (%)"], ["stat", "Tasa estadística (%)"], ["vat", "IVA (%)"],
   ["insurance", "Seguro (%)"], ["airRateChina", "Aéreo China (USD/kg)"], ["airRateUSA", "Aéreo USA (USD/kg)"],
-  ["airRateEspana", "Aéreo España (USD/kg)"], ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
+  ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
   ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
   ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
   ["pickup", "Pick up aéreo (USD)"], ["pickupSea", "Pick up marítimo (USD)"], ["handling", "Handling avión (USD)"],
@@ -2055,7 +2008,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
             <Inp type="number" placeholder="Alto cm" value={d.alto} onChange={e => set("alto", e.target.value)} style={inputMini} />
             <Inp type="number" placeholder="m³ (directo)" value={d.m3manual} onChange={e => set("m3manual", e.target.value)} style={inputMini} />
             <select value={d.origenSel} onChange={e => { const v = e.target.value; setD(p => ({ ...p, origenSel: v, ...(v !== "China" && p.tipo === "dhl" ? { tipo: "avion" } : {}) })); }} style={{ ...inputMini, cursor: "pointer" }}>
-              <option>China</option><option>Estados Unidos (USA)</option><option>España</option><option value="otro">Otro</option>
+              <option>China</option><option>Estados Unidos (USA)</option><option value="otro">Otro</option>
             </select>
             <Inp type="number" placeholder="Arancel % (manual)" value={d.manualDuty} onChange={e => { const value = e.target.value; set("manualDuty", value); if (value !== "") setOv(p => ({ ...p, duty: "" })); }} style={inputMini} />
             <Inp placeholder="CP entrega (opcional)" value={d.cp} onChange={e => set("cp", e.target.value)} style={inputMini} />
@@ -2066,7 +2019,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             {[
               ...(s.dhlActive && d.origenSel === "China" ? [["dhl", "⚡ DHL"]] : []),
-              ["avion", "✈️ Aéreo"], ["barco-m3", "🚢 Marítimo m³"],
+              ["avion", "✈️ Aéreo comercial"], ["barco-m3", "🚢 Marítimo m³"],
             ].map(([v, l]) => {
               const activo = v === "dhl" ? d.tipo === "dhl" : v === "avion" ? d.tipo === "avion" : d.tipo === "barco";
               return (
@@ -2080,15 +2033,6 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
               );
             })}
           </div>
-          {d.tipo === "avion" && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              {[["comercial", "🏢 Comercial"], ["personal", "👤 Personal"]].map(([v, l]) => (
-                <button key={v} onClick={() => set("subTipo", v)}
-                  style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: `2px solid ${d.subTipo === v ? "#18548a" : "#e2e8f0"}`, background: d.subTipo === v ? "#eef5fb" : "white", color: d.subTipo === v ? "#0f3d68" : "#64748b", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{l}</button>
-              ))}
-            </div>
-          )}
-
           {/* Tarifas de esta cotización (overrides temporales) */}
           <button onClick={() => setShowRates(v => !v)}
             style={{ width: "100%", marginTop: 14, padding: "10px 0", borderRadius: 10, border: "1px dashed #cbd5e1", background: "#f8fafc", color: "#475569", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>

@@ -15,7 +15,7 @@ describe("peso volumétrico y facturable (aéreo)", () => {
     expect(calculate(baseAereo, S).pFact).toBe(10); // real 10 > vol 1.6
     expect(calculate({ ...baseAereo, peso: "1", largo: "50", ancho: "50", alto: "50" }, S).pFact).toBeCloseTo(25); // vol 25 > real 1
   });
-  it("tarifa por país: USA 20, China/otro 23, España propia", () => {
+  it("tarifa por país: USA 20 y China/otros orígenes habilitados 23", () => {
     expect(calculate({ ...baseAereo, origenSel: "Estados Unidos (USA)" }, S).airRate).toBe(20);
     expect(calculate({ ...baseAereo, origenSel: "China" }, S).airRate).toBe(23);
     expect(calculate({ ...baseAereo, origenSel: "" }, S).airRate).toBe(23); // otro país → China
@@ -35,24 +35,6 @@ describe("aéreo comercial — tributos", () => {
     expect(r.stat).toBeCloseTo(r.cif * 0.03);
     expect(r.iva).toBeCloseTo((r.cif + r.duty + r.stat) * 0.21);
     expect(r.addVat).toBe(0); expect(r.gains).toBe(0); expect(r.ib).toBe(0);
-  });
-});
-
-describe("franquicia personal (aéreo)", () => {
-  it("FOB 500, arancel 20% → derecho 20; IVA 109,20 (regla validada por el dueño)", () => {
-    const r = calculate({ ...baseAereo, subTipo: "personal", fob: "500" }, S);
-    expect(r.flete).toBeCloseTo(230);
-    expect(r.fleteBase).toBeCloseTo(30);
-    expect(r.cif).toBeCloseTo(535.3);
-    expect(r.duty).toBeCloseTo(27.06);
-    expect(r.iva).toBeCloseTo(118.0956);
-    expect(r.stat).toBe(0);
-  });
-  it("FOB ≤ 400 → exento de derechos, IVA sobre FOB", () => {
-    const r = calculate({ ...baseAereo, subTipo: "personal", fob: "300" }, S);
-    expect(r.duty).toBe(0);
-    expect(r.cif).toBeCloseTo(333.3);
-    expect(r.iva).toBeCloseTo(69.993);
   });
 });
 

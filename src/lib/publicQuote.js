@@ -1,6 +1,6 @@
-import { calculate, dhlEligibility, packTotals, assertCurrentMode } from "./calc.js";
+import { calculate, dhlEligibility, packTotals, assertCurrentMode, originAllowed } from "./calc.js";
 
-export const originAllowed = (origin) => !/^(espa[nñ]a|spain)$/i.test(String(origin || "").trim());
+export { originAllowed } from "./calc.js";
 const commercial = d => ({ ...d, subTipo:"comercial", seaMode:"m3" });
 export const publicQuote = (input, settings) => {
   assertCurrentMode(input);
@@ -10,6 +10,7 @@ export const publicQuote = (input, settings) => {
   return { d, r:calculate(d, settings) };
 };
 export const publicModes = (input, settings) => {
+  assertCurrentMode(input);
   const d = commercial(input);
   const volume = packTotals(d).volCm3;
   const m3 = d.tipo === "barco" && +d.m3manual > 0 ? +d.m3manual : volume / 1e6;

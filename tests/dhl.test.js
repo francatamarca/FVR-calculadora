@@ -71,7 +71,7 @@ describe("DHL — elegibilidad (China + comercial + ≥10 kg)", () => {
   it("origen sin elegir (default China de FVR) → elegible", () => expect(dhlEligibility({ ...ok, origenSel: "" }, S).ok).toBe(true));
   it("Estados Unidos → NO", () => expect(dhlEligibility({ ...ok, origenSel: "Estados Unidos (USA)" }, S)).toMatchObject({ ok: false, reason: "origen" }));
   it("España → NO", () => expect(dhlEligibility({ ...ok, origenSel: "España" }, S).ok).toBe(false));
-  it("envío personal → NO (franquicia intacta)", () => expect(dhlEligibility({ ...ok, subTipo: "personal" }, S)).toMatchObject({ ok: false, reason: "personal" }));
+  it("subtipo retirado → no elegible", () => expect(dhlEligibility({ ...ok, subTipo: "personal" }, S)).toMatchObject({ ok: false, reason: "modalidad" }));
   it("menos de 10 kg facturables → NO, con motivo 'peso'", () => {
     const e = dhlEligibility({ ...ok, peso: 4 }, S);
     expect(e).toMatchObject({ ok: false, reason: "peso" });

@@ -4,7 +4,7 @@
    NO cambiar fórmulas sin validar contra los tests de tests/calc.test.js. */
 
 export const DEF = {
-  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1,
+  airRateUSA: 20, airRateChina: 23, seaRate: 600, seaMin: 1,
   airCustomsPerKg: 3, seaCustomsPerM3: 50,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
@@ -36,7 +36,15 @@ export const currentSettings = (input = {}) => Object.fromEntries(
   Object.entries(input).filter(([key]) => Object.prototype.hasOwnProperty.call(DEF, key)),
 );
 
+export const originAllowed = (origin) => !/^(espa[nñ]a|spain)$/i.test(String(origin || "").trim());
+
 export const assertCurrentMode = (d) => {
+  if (![d.origenSel, d.paisOrigen].every(originAllowed)) {
+    throw new Error("Origen no disponible.");
+  }
+  if (d.tipo !== "barco" && d.subTipo && d.subTipo !== "comercial") {
+    throw new Error("Modalidad no disponible. El envío aéreo es únicamente comercial.");
+  }
   if (d.tipo === "barco" && d.seaMode && d.seaMode !== "m3") {
     throw new Error("Modalidad no disponible. Elegí marítimo por m³ y cargá el volumen.");
   }
@@ -77,6 +85,7 @@ export const packTotals = (d) => {
    - Único cargo logístico: Handling DHL fijo. Sin honorarios, sin pick up,
      sin envío nacional, sin handling aéreo. */
 export const calculateDhl = (d, s) => {
+  assertCurrentMode({ ...d, tipo:"dhl" });
   const fob  = +d.fob || 0;
   const peso = +d.peso || 0;
   const { volCm3 } = packTotals(d);
@@ -109,7 +118,7 @@ export const calculateDhl = (d, s) => {
 
   return {
     isDhl: true, isAir: false, seaM3: false, byWeight: true,
-    internalTaxes: false, isPersonal: false, hasHandling: true,
+    internalTaxes: false, hasHandling: true,
     fob, peso, pVol, pFact, m3: 0, m3Fact: 0, airRate,
     flete, fleteBase, customsPerKg, customsOverride: hasOverride,
     seguro, cif, duty, stat, ivaBase, iva,
@@ -124,9 +133,10 @@ export const calculateDhl = (d, s) => {
    es China en toda la app) + comercial + peso facturable ≥ mínimo. */
 export const dhlEligibility = (d, s) => {
   if (!s.dhlActive) return { ok: false, reason: "off" };
+  try { assertCurrentMode({ ...d, tipo:"dhl" }); }
+  catch { return { ok:false, reason:"modalidad" }; }
   const origen = d.origenSel || "";
   if (origen !== "" && origen !== "China") return { ok: false, reason: "origen" };
-  if (d.tipo === "avion" && d.subTipo === "personal") return { ok: false, reason: "personal" };
   const r = calculateDhl(d, s);
   const min = s.dhlMinKg != null && s.dhlMinKg !== "" ? +s.dhlMinKg : 10;
   if (!(r.pFact >= min)) return { ok: false, reason: "peso", pFact: r.pFact, min };
@@ -143,7 +153,6 @@ export const calculate = (d, s) => {
   const seaM3      = d.tipo === "barco";
   const byWeight   = isAir;
   const internalTaxes = seaM3;                                   // impuestos internos: solo marítimo m³
-  const isPersonal = isAir && d.subTipo === "personal";
 
   let flete = 0, pVol = 0, pFact = 0, m3 = 0, m3Fact = 0, airRate = 0;
   if (isAir) {
@@ -152,7 +161,6 @@ export const calculate = (d, s) => {
       pVol  = volCm3 / 5000;
       pFact = Math.max(pVol, peso);
       airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
-              : d.origenSel === "España"               ? (+s.airRateEspana || 0)
               : (+s.airRateChina || 0);
     flete = pFact * airRate;
   } else {
@@ -165,7 +173,7 @@ export const calculate = (d, s) => {
      Aduana son conceptos distintos. El primero se cobra al cliente; el
      segundo solo forma seguro, CIF y tributos y nunca se duplica en el total.
 
-     - Aereo (personal y comercial): peso facturable x USD 3/kg.
+     - Aereo comercial: peso facturable x USD 3/kg.
      - Maritimo por m3: volumen facturable x USD 50/m3. */
   const customsPerUnit = isAir ? (+s.airCustomsPerKg || 0)
     : seaM3 ? (+s.seaCustomsPerM3 || 0)
@@ -182,14 +190,6 @@ export const calculate = (d, s) => {
     ? +d.aiDutyRate : (+s.duty || 0);
 
   let duty = 0, stat = 0, ivaBase = 0, iva = 0, addVat = 0, gains = 0, ib = 0;
-  if (isPersonal) {
-    // La franquicia se aplica sobre el valor aduanero; el flete comercial no
-    // entra en la base, pero si el flete aduanero estimado de USD 3/kg.
-    const excedentePersonal = Math.max(0, cif - 400);
-    duty = excedentePersonal * (effectiveDutyPct / 100);
-    ivaBase = cif + duty;
-    iva  = ivaBase * ((+s.vat || 0) / 100);
-  } else {
     duty    = cif * (effectiveDutyPct / 100);
     stat    = cif * ((+s.stat || 0) / 100);
     ivaBase = cif + duty + stat;
@@ -197,8 +197,6 @@ export const calculate = (d, s) => {
     addVat  = internalTaxes && s.addVatOn ? ivaBase * ((+s.addVat || 0) / 100) : 0;
     gains   = internalTaxes && s.gainsOn  ? ivaBase * ((+s.gains  || 0) / 100) : 0;
     ib      = internalTaxes && s.ibOn     ? ivaBase * ((+s.ib     || 0) / 100) : 0;
-  }
-
   const pickup     = isAir ? (+s.pickup || 0) : (+s.pickupSea || 0);
   // Barco por m³ no tiene handling; el aéreo conserva su regla por peso.
   const hasHandling = isAir;
@@ -234,7 +232,7 @@ export const calculate = (d, s) => {
   const unitario = cantidad ? totalGen / cantidad : null;
 
   return {
-    fob, isAir, seaM3, byWeight, internalTaxes, isPersonal, hasHandling,
+    fob, isAir, seaM3, byWeight, internalTaxes, hasHandling,
     peso, pVol, pFact, m3, m3Fact, airRate,
     flete, fleteBase, customsPerUnit, seguro, cif, duty, stat, ivaBase, iva,
     addVat, gains, ib, pickup, handling, domestic, fees,
@@ -248,12 +246,13 @@ export const calculate = (d, s) => {
    El m³ para barco se estima desde las medidas si no fue cargado
    (L×A×H en cm → m³), multiplicado por bultos si hay. */
 export const compareModes = (d, s) => {
+  try { assertCurrentMode(d); } catch { return []; }
   const { volCm3 } = packTotals(d);
   const m3Est = d.m3manual && +d.m3manual > 0 ? +d.m3manual : volCm3 / 1000000;
 
   const out = [];
   if (+d.peso > 0 && volCm3 > 0) {
-    const data = { ...d, tipo: "avion", subTipo: d.subTipo === "personal" ? "personal" : "comercial" };
+    const data = { ...d, tipo: "avion", subTipo: "comercial" };
     out.push({ key: "aereo", label: "✈️ Aéreo", nota: "Más rápido",
       d: data, r: calculate(data, s) });
   }

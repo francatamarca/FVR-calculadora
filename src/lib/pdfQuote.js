@@ -42,7 +42,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const dutySuffix = d.tariffGeneric ? " · genérico FVR" : d.categoria ? " · categoría" : (d.dutyManual ? " · manual" : (d.aiDutyRate !== null && d.aiDutyRate !== undefined ? " · estimado" : ""));
   const tipo = r.isDhl ? "DHL Express · Envío Comercial"
     : d.tipo === "avion"
-      ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
+      ? "Avión · Envío Comercial"
       : "Barco · Por m³";
   const del = r.isDhl ? deliveryEstimate(d.cp, s) : null;
 
@@ -172,11 +172,6 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
 
   /* ── Impuestos y tributos ── */
   const trib = [];
-  if (r.isPersonal) {
-    trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix})${r.cif <= 400 ? " — exento hasta USD 400" : " sobre excedente de USD 400"}`, USD(r.duty)]);
-    trib.push(["Tasa estadística", "No aplica"]);
-    trib.push([`IVA (${s.vat}% sobre valor aduanero + derechos)`, USD(r.iva)]);
-  } else {
     trib.push([`Derecho de importación (${r.effectiveDutyPct}%${dutySuffix})`, USD(r.duty)]);
     trib.push([`Tasa estadística (${s.stat}%)`, USD(r.stat)]);
     trib.push(["Base imponible IVA", USD(r.ivaBase)]);
@@ -186,7 +181,6 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       trib.push([`Ganancias (${s.gains}%)`, USD(r.gains)]);
       trib.push([`Ingresos Brutos (${s.ib}%)`, USD(r.ib)]);
     }
-  }
   section("IMPUESTOS Y TRIBUTOS", trib);
 
   /* ── Servicios logísticos ── */

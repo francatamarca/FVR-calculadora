@@ -16,8 +16,8 @@ describe("oferta comercial pública", () => {
   });
   it("respeta DHL desactivado y retira opciones anteriores de los resultados", () => {
     expect(publicQuote(base,{...DEF,dhlPublic:false}).d.tipo).toBe("avion");
-    const q=publicQuote({...base,tipo:"barco",seaMode:"kg",subTipo:"personal",m3manual:2},DEF);
-    expect(q.d.seaMode).toBe("m3"); expect(q.r.isPersonal).toBe(false); expect(q.r.seaKg).toBe(false);
+    const q=publicQuote({...base,tipo:"barco",seaMode:"m3",subTipo:"personal",m3manual:2},DEF);
+    expect(q.d.seaMode).toBe("m3"); expect(q.r.isPersonal).toBe(false); expect(q.r.seaM3).toBe(true);
   });
   it("no ofrece aéreo sin medidas ni acepta la ruta retirada", () => {
     expect(publicModes({...base,tipo:"barco",largo:"",ancho:"",alto:"",m3manual:1},DEF).map(m=>m.key)).toEqual(["seaM3"]);

@@ -1,10 +1,12 @@
+import { currentSettings, DEF } from "./calc.js";
+
 const hasValue = (value) => value !== "" && value !== null && value !== undefined;
 
 export const mergeTemporarySettings = (settings, overrides = {}) => ({
-  ...settings,
+  ...currentSettings(settings),
   ...Object.fromEntries(
     Object.entries(overrides)
-      .filter(([, value]) => hasValue(value) && Number.isFinite(Number(value)))
+      .filter(([key, value]) => Object.prototype.hasOwnProperty.call(DEF, key) && hasValue(value) && Number.isFinite(Number(value)))
       .map(([key, value]) => [key, Number(value)]),
   ),
 });

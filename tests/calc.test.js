@@ -78,30 +78,10 @@ describe("barco por m³ (LCL)", () => {
   });
 });
 
-describe("barco por kilo", () => {
-  const d = { tipo: "barco", seaMode: "kg", fob: "1000", peso: "2", largo: "50", ancho: "50", alto: "50", aiDutyRate: 20 };
-  it("cobra por peso REAL: ignora el volumétrico aunque haya medidas", () => {
-    const r = calculate(d, S);
-    expect(r.pFact).toBe(2);              // real, NO 25 volumétrico
-    expect(r.flete).toBeCloseTo(26);      // 2 kg × 13
-  });
-  it("tributos de aéreo comercial, SIN impuestos internos", () => {
-    const r = calculate(d, S);
-    expect(r.stat).toBeGreaterThan(0);
-    expect(r.addVat).toBe(0); expect(r.gains).toBe(0); expect(r.ib).toBe(0);
-  });
-  it("sin pick up y con handling fijo de USD 20, sin límite por peso", () => {
-    expect(calculate(d, S).pickup).toBe(0);
-    expect(calculate(d, S).handling).toBe(20);
-    expect(calculate({ ...d, peso: "50" }, S).handling).toBe(20);
-  });
-});
-
 describe("honorarios por modalidad y arancel manual", () => {
-  it("avión 8%, barco m³ 5%, barco kg 8% (s/FOB 1000)", () => {
+  it("avión 8% y barco m³ 5% (s/FOB 1000)", () => {
     expect(calculate(baseAereo, S).fees).toBeCloseTo(80);
     expect(calculate({ tipo: "barco", seaMode: "m3", fob: "1000", m3manual: "1", aiDutyRate: 20 }, S).fees).toBeCloseTo(50);
-    expect(calculate({ tipo: "barco", seaMode: "kg", fob: "1000", peso: "2", aiDutyRate: 20 }, S).fees).toBeCloseTo(80);
   });
   it("arancel manual (aiDutyRate) pisa el default; sin él usa settings.duty", () => {
     expect(calculate({ ...baseAereo, aiDutyRate: 35 }, S).effectiveDutyPct).toBe(35);
@@ -116,9 +96,9 @@ describe("honorarios por modalidad y arancel manual", () => {
 });
 
 describe("comparador de modalidades", () => {
-  it("con peso+medidas compara las 3 y recomienda la más barata", () => {
+  it("con peso+medidas compara aéreo y m³ y recomienda la más barata", () => {
     const modos = compareModes({ fob: "1000", peso: "2", largo: "30", ancho: "30", alto: "30", bultos: "1", aiDutyRate: 20, subTipo: "comercial" }, S);
-    expect(modos.length).toBe(3);
+    expect(modos.map(m => m.key)).toEqual(["aereo", "barcoM3"]);
     const rec = modos.find(m => m.recomendada);
     expect(rec).toBeDefined();
     expect(Math.min(...modos.map(m => m.r.totalGen))).toBeCloseTo(rec.r.totalGen);

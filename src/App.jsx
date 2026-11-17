@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { DEF, calculate, compareModes, packTotals, dhlEligibility } from "./lib/calc.js";
+import { DEF, calculate, compareModes, packTotals, dhlEligibility, currentSettings } from "./lib/calc.js";
 import { deliveryEstimate, normalizeCP } from "./lib/dhlZones.js";
 import { loadClientProfile, saveClientProfile } from "./lib/clientProfile.js";
 import { GENERIC_DUTY_RATE, genericEstimate, classificationPatch } from "./lib/searchPolicy.js";
@@ -60,7 +60,7 @@ const buildWAMsg = (d, r, rate, s) => {
   }
   const tipo = d.tipo === "avion"
     ? `Avion - ${d.subTipo === "personal" ? "Envio Personal (Franquicia)" : "Envio Comercial"}`
-    : (d.seaMode === "kg" ? "Barco - Por kilo" : "Barco - Por m3");
+    : "Barco - Por m3";
   const lines = [
     "== PRESUPUESTO DE IMPORTACION ==",
     "FVR Logistica Internacional",
@@ -77,9 +77,7 @@ const buildWAMsg = (d, r, rate, s) => {
     "FOB / Valor productos: " + USD(r.fob),
     r.isAir
       ? ("Peso real: " + r.peso + " kg | Volumetrico: " + fmt(r.pVol) + " kg | Facturable: " + fmt(r.pFact) + " kg")
-      : r.seaKg
-        ? ("Peso real: " + r.peso + " kg")
-        : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
+      : ("Volumen: " + fmt(r.m3, 3) + " m3 | Facturable: " + fmt(r.m3Fact, 3) + " m3"),
     "",
     "== COSTOS DETALLADOS ==",
     "Flete internacional: " + USD(r.flete),
@@ -143,7 +141,7 @@ const buildShortSummary = (d, r, rate, s = {}) => {
   }
   const tipo = d.tipo === "avion"
     ? (d.subTipo === "personal" ? "Aéreo (envío personal)" : "Aéreo")
-    : (d.seaMode === "kg" ? "Marítimo por kilo" : "Marítimo por m³");
+    : "Marítimo por m³";
   const lines = [
     `*Cotización de importación — FVR Logística*`,
     ``,
@@ -338,29 +336,6 @@ const SubTipoSel = ({ value, onChange }) => (
   </div>
 );
 
-const SeaModeSel = ({ value, onChange }) => (
-  <div style={{ marginTop:16 }}>
-    <p style={{ fontSize:11, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>Modalidad marítima</p>
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-      {[{ v:"m3", icon:"📦", label:"Por m³" }, { v:"kg", icon:"⚖️", label:"Por kilo" }].map(({ v, icon, label }) => (
-        <button key={v} onClick={() => onChange(v)} type="button"
-          style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${value===v?"#18548a":"#e2e8f0"}`,
-            background: value===v ? "#eef5fb" : "#f8fafc", cursor:"pointer",
-            display:"flex", alignItems:"center", gap:10,
-            boxShadow: value===v ? "0 2px 10px rgba(24,84,138,0.12)" : "none" }}>
-          <span style={{ fontSize:22 }}>{icon}</span>
-          <span style={{ fontWeight:700, fontSize:13, color: value===v ? "#0f3d68" : "#334155" }}>{label}</span>
-        </button>
-      ))}
-    </div>
-    {value === "kg" && (
-      <div style={{ marginTop:10, background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:12, fontSize:12, color:"#0f3d68" }}>
-        <strong>⚖️ Marítimo por kilo:</strong> se cobra por el <strong>peso real</strong> (no se usan medidas ni peso volumétrico).
-      </div>
-    )}
-  </div>
-);
-
 /* ── AI ANALYSIS ─────────────────────────────────────────── */
 const callAnalyzeAPI = async (type, value, signal) => {
   // cache-buster + no-store para evitar respuestas arancelarias cacheadas
@@ -541,7 +516,7 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
         if (!gOk) e.medidas = "Completá cantidad, peso y medidas de todos los grupos";
       }
     }
-    if (form.tipo === "barco" && form.seaMode !== "kg" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
+    if (form.tipo === "barco" && (!form.m3manual || +form.m3manual <= 0)) e.m3manual = "Ingresá los metros cúbicos";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -646,9 +621,8 @@ const CalculatorForm = ({ settings, onCalculate, onAdminClick, dolar, dolarErr, 
     setDocX(p => ({ ...p, data: null, applied: true })); // conserva procesados y docUrls
   };
 
-  const seaKg    = form.tipo === "barco" && form.seaMode === "kg";
-  const byWeight = form.tipo === "avion" || seaKg;
-  const seaM3    = form.tipo === "barco" && !seaKg;
+  const byWeight = form.tipo === "avion";
+  const seaM3    = form.tipo === "barco";
   // Volumen total = Σ de todos los bultos (grupos o legacy) — misma fuente que el motor
   const formVol = packTotals(form.bultosIguales ? { ...form, packageGroups: [] } : form).volCm3;
   const pVol  = byWeight && formVol > 0 ? formVol / 5000 : 0;
@@ -1107,10 +1081,8 @@ const Row = ({ label, usd, dolar, hi, na, note }) => (
 /* ── RESULTS VIEW ────────────────────────────────────────── */
 const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, onWhatsApp }) => {
   // ── Modalidades conmutables (igual que la calculadora interna) ──
-  // Con los mismos datos el cliente alterna entre aéreo comercial, marítimo
-  // por kilo y marítimo por m³ — este último solo si hay volumen calculable
-  // (m³ manual o medidas L×A×H, multiplicado por bultos). Envío personal
-  // queda aparte (otra lógica, sin comparador).
+  // Con los mismos datos el cliente alterna entre aéreo comercial y marítimo
+  // por m³, cuando hay volumen calculable (manual o medidas de los bultos).
   const esPersonal = false;
   const volTotal = packTotals(d0).volCm3;
   const MODES = publicModes(d0, s);
@@ -1274,8 +1246,8 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
         <Card icon="🌐" title="Flete internacional">
           <Row label="FOB / Valor productos" usd={r.fob} dolar={dolar} />
           {r.byWeight ? (<>
-            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13, background: r.seaKg ? "#eef5fb" : "transparent" }}>
-              <span style={{ color: r.seaKg ? "#0f3d68" : "#334155", fontWeight: r.seaKg ? 700 : 400 }}>{r.seaKg ? "Peso real" : "Peso real total"}</span><span style={{ fontWeight: r.seaKg ? 700 : 600, color: r.seaKg ? "#0f3d68" : "#15233b" }}>{fmt(r.peso)} kg</span>
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
+              <span style={{ color:"#334155" }}>Peso real total</span><span style={{ fontWeight:600, color:"#15233b" }}>{fmt(r.peso)} kg</span>
             </div>
             {r.isAir && (<>
               <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
@@ -1285,7 +1257,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
                 <span style={{ fontWeight:700, color:"#0f3d68" }}>Peso facturable (el mayor)</span><span style={{ fontWeight:700, color:"#0f3d68" }}>{fmt(r.pFact)} kg</span>
               </div>
             </>)}
-            <Row label={`${r.seaKg ? "Tarifa marítima" : "Tarifa aérea"} (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
+            <Row label={`Tarifa aérea (USD ${r.airRate}/kg)`} usd={r.flete} dolar={dolar} />
           </>) : (<>
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 16px", borderBottom:"1px solid #eef2f7", fontSize:13 }}>
               <span style={{ color:"#334155" }}>Volumen ingresado</span><span style={{ fontWeight:600 }}>{fmt(r.m3, 3)} m³</span>
@@ -1325,9 +1297,7 @@ const ResultsView = ({ formData: d0, results: r0, dolar, settings: s, onBack, on
             : <div style={{ textAlign:"center", padding:"20px 0" }}>
                 <p style={{ fontSize:32, marginBottom:8 }}>{r.isAir ? "✈️" : "🚢"}</p>
                 <p style={{ fontSize:13, color:"#64748b" }}>
-                  {r.seaKg
-                    ? "En la modalidad marítima por kilo no se aplican percepciones estimadas (se calcula como el aéreo comercial)."
-                    : "Esta estimación no suma percepciones en la modalidad aérea. Requiere revisión para la liquidación final."}
+                  Esta estimación no suma percepciones en la modalidad aérea. Requiere revisión para la liquidación final.
                 </p>
               </div>
           }
@@ -1824,8 +1794,6 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
                 <SettingField s={s} setS={setS} label="Tarifa por m³ (USD / m³)" k="seaRate"/><SettingField s={s} setS={setS} label="Mínimo facturable (m³)" k="seaMin"/>
                 <SettingField s={s} setS={setS} label="Base aduanera por volumen (USD/m³)" k="seaCustomsPerM3" min={0}/>
               </div>
-              <SettingField s={s} setS={setS} label="⚖️ Tarifa por kilo (USD / kg)" k="seaRateKg"/>
-              <p style={{ fontSize:11, color:"#64748b", marginTop:4 }}>La modalidad marítima "por kilo" se calcula con los mismos impuestos que el aéreo comercial; lo único que cambia es esta tarifa por kg.</p>
             </Card>
             <Card icon="🛡️" title="Seguro y aduana">
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
@@ -1859,14 +1827,6 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
                 <SettingField s={s} setS={setS} label="Cobrar handling solo si peso facturable es menor a (kg)" k="handlingMaxKg" min={0} step="0.1"/>
                 <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Si el peso facturable iguala o supera ese valor, el handling pasa a USD 0 automáticamente.</p>
               </div>
-              <div style={{ background:"#eef5fb", border:"1px solid #b9cee2", borderRadius:12, padding:"12px 14px", marginTop:4, marginBottom:4 }}>
-                <p style={{ fontSize:12, color:"#0f3d68", fontWeight:700, marginBottom:8 }}>⚖️ Marítimo por kilo</p>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                  <SettingField s={s} setS={setS} label="Handling fijo (USD)" k="handlingSea"/>
-                  <SettingField s={s} setS={setS} label="Envío nacional (USD)" k="domesticSeaKg"/>
-                </div>
-                <p style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Se cobra siempre por operación, sin umbral de peso.</p>
-              </div>
               <Field label="Tipo de honorarios">
                 <div style={{ display:"flex", gap:12 }}>
                   {["fixed","percentage"].map(t=>(
@@ -1883,13 +1843,11 @@ const AdminPanel = ({ settings, settingsSync, refreshSettings, saveSettings, quo
                 ? <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
                     <SettingField s={s} setS={setS} label="✈️ Avión (USD)" k="feeFixed"/>
                     <SettingField s={s} setS={setS} label="🚢 Barco m³ (USD)" k="feeFixedSea"/>
-                    <SettingField s={s} setS={setS} label="⚖️ Marítimo kg (USD)" k="feeFixedKg"/>
                   </div>
                 : <>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:16 }}>
                       <SettingField s={s} setS={setS} label="✈️ Avión (%)" k="feePct" min={0} max={30}/>
                       <SettingField s={s} setS={setS} label="🚢 Barco m³ (%)" k="feePctSea" min={0} max={30}/>
-                      <SettingField s={s} setS={setS} label="⚖️ Marítimo kg (%)" k="feePctKg" min={0} max={30}/>
                     </div>
                     <Field label="Calcular % sobre">
                       <select value={s.feeBase||"fob"} onChange={e=>setS(p=>({...p,feeBase:e.target.value}))} style={inputStyle}>
@@ -1957,13 +1915,12 @@ const OV_FIELDS = [
   ["duty", "Derecho importación (%)"], ["stat", "Tasa estadística (%)"], ["vat", "IVA (%)"],
   ["insurance", "Seguro (%)"], ["airRateChina", "Aéreo China (USD/kg)"], ["airRateUSA", "Aéreo USA (USD/kg)"],
   ["airRateEspana", "Aéreo España (USD/kg)"], ["airCustomsPerKg", "Aéreo base aduanera (USD/kg)"],
-  ["seaRateKg", "Marítimo (USD/kg)"], ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
+  ["seaRate", "Marítimo (USD/m³)"], ["seaCustomsPerM3", "Marítimo base aduanera (USD/m³)"],
   ["seaMin", "Mínimo marítimo (m³)"], ["feePct", "Honorarios avión (%)"], ["feePctSea", "Honorarios barco m³ (%)"],
-  ["feePctKg", "Honorarios barco kg (%)"], ["pickup", "Pick up aéreo (USD)"], ["pickupSea", "Pick up marítimo (USD)"], ["handling", "Handling avión (USD)"],
-  ["handlingSea", "Handling marítimo kg (USD)"],
+  ["pickup", "Pick up aéreo (USD)"], ["pickupSea", "Pick up marítimo (USD)"], ["handling", "Handling avión (USD)"],
   ["handlingMaxKg", "Umbral handling avión (se cobra si peso < kg)"],
   ["domestic", "Envío nac. avión (USD)"],
-  ["domesticSeaKg", "Envío nac. barco kg (USD)"], ["domesticSea", "Envío nac. barco m³ (USD)"],
+  ["domesticSea", "Envío nac. barco m³ (USD)"],
   // ── DHL Express (solo esta cotización) ──
   ["dhlRateLow", "DHL tarifa 10–29,999 kg (USD/kg)"], ["dhlRateHigh", "DHL tarifa desde 30 kg (USD/kg)"],
   ["dhlDivisor", "DHL divisor volumétrico"], ["dhlCustomsPerKg", "DHL flete base aduanera (USD/kg)"],
@@ -1972,7 +1929,7 @@ const OV_FIELDS = [
 
 const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, dolar, fetchDolar, embedded = false }) => {
   const blank = { producto: "", nombre: "", cantidad: "", fob: "", peso: "", largo: "", ancho: "", alto: "", m3manual: "", bultos: "",
-    origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "kg", manualDuty: "", aiDutyRate: null,
+    origenSel: "China", tipo: "avion", subTipo: "comercial", seaMode: "m3", manualDuty: "", aiDutyRate: null,
     cp: "", dhlCustomsOverride: "" };
   const [d, setD] = useState(blank);
   const [ov, setOv] = useState({});           // overrides temporales de settings (solo esta cotización)
@@ -2010,7 +1967,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
       .filter(m => keys.includes(m.key))
       .reduce((best, m) => !best || m.r.totalGen < best.r.totalGen ? m : best, null);
     const air = cheapest(["aereo", "dhl"]);
-    const sea = cheapest(["barcoKg", "barcoM3"]);
+    const sea = cheapest(["barcoM3"]);
     if (!air && !sea) return;
     setPdfLoading(true);
     try {
@@ -2039,7 +1996,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
     `Dólar: $${fmt(rate || 0)}${dolarOv ? " (manual de esta cotización)" : ""}`,
   ].filter(Boolean).join("\n") : [
     `COTIZACIÓN INTERNA FVR — ${d.producto || "sin producto"}`,
-    `Modalidad: ${d.tipo === "avion" ? "Aéreo" : d.seaMode === "kg" ? "Marítimo kg" : "Marítimo m³"} · Origen: ${d.origenSel}`,
+    `Modalidad: ${d.tipo === "avion" ? "Aéreo" : "Marítimo m³"} · Origen: ${d.origenSel}`,
     `FOB ${USD(r.fob)} · ${r.byWeight ? `Peso fact. ${fmt(r.pFact)} kg × ${r.airRate}/kg` : `Vol ${fmt(r.m3Fact, 2)} m³ × ${s.seaRate}/m³`}`,
     `Flete cobrado ${USD(r.flete)}${r.customsPerUnit != null ? ` · Base aduanera ${USD(r.fleteBase)} (NO se cobra)` : ""} · Seguro ${USD(r.seguro)} · CIF ${USD(r.cif)}`,
     `Derecho ${r.effectiveDutyPct}% ${USD(r.duty)} · Tasa est. ${USD(r.stat)} · IVA ${USD(r.iva)}`,
@@ -2109,14 +2066,14 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             {[
               ...(s.dhlActive && d.origenSel === "China" ? [["dhl", "⚡ DHL"]] : []),
-              ["avion", "✈️ Aéreo"], ["barco-kg", "🚢 Kg"], ["barco-m3", "🚢 m³"],
+              ["avion", "✈️ Aéreo"], ["barco-m3", "🚢 Marítimo m³"],
             ].map(([v, l]) => {
-              const activo = v === "dhl" ? d.tipo === "dhl" : v === "avion" ? d.tipo === "avion" : d.tipo === "barco" && (v === "barco-kg" ? d.seaMode === "kg" : d.seaMode === "m3");
+              const activo = v === "dhl" ? d.tipo === "dhl" : v === "avion" ? d.tipo === "avion" : d.tipo === "barco";
               return (
                 <button key={v} onClick={() =>
                     v === "dhl" ? setD(p => ({ ...p, tipo: "dhl", subTipo: "comercial" })) // DHL siempre comercial
                     : v === "avion" ? set("tipo", "avion")
-                    : setD(p => ({ ...p, tipo: "barco", seaMode: v === "barco-kg" ? "kg" : "m3" }))}
+                    : setD(p => ({ ...p, tipo: "barco", seaMode: "m3" }))}
                   style={{ flex: 1, minWidth: 74, padding: "10px 0", borderRadius: 10, border: `2px solid ${activo ? (v === "dhl" ? "#f26c1e" : "#18548a") : "#e2e8f0"}`, background: activo ? (v === "dhl" ? "#fff2e9" : "#eef5fb") : "white", color: activo ? (v === "dhl" ? "#d9590f" : "#0f3d68") : "#64748b", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                   {l}
                 </button>
@@ -2212,7 +2169,7 @@ const InternoView = ({ settings, settingsSync, refreshSettings, saveSettings, do
             </button>
             <button onClick={doPDF} disabled={pdfLoading}
               style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "none", background: pdfLoading ? "#334155" : "linear-gradient(135deg,#0f3d68,#18548a)", color: "white", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
-              {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "dhl" ? "DHL" : d.tipo === "avion" ? "aéreo" : d.seaMode === "kg" ? "marítimo kg" : "marítimo m³"}`}
+              {pdfLoading ? "⏳ Generando…" : `📄 Descargar PDF ${d.tipo === "dhl" ? "DHL" : d.tipo === "avion" ? "aéreo" : "marítimo m³"}`}
             </button>
             <button onClick={doBestPDFs} disabled={pdfLoading || modos.length === 0}
               style={{ gridColumn: "1/-1", padding: "13px 0", borderRadius: 12, border: "2px solid #f26c1e", background: "white", color: "#d9590f", fontWeight: 800, fontSize: 13, cursor: pdfLoading ? "wait" : "pointer" }}>
@@ -2233,7 +2190,7 @@ const IS_INTERNO = typeof window !== "undefined" && window.location.pathname.sta
 
 export default function App() {
   const [view,       setView]      = useState(IS_INTERNO ? "interno-login" : "calc");
-  const [settings,   setSettings]  = useState(() => ({ ...DEF, ...ls("fvr_cfg", DEF) }));
+  const [settings,   setSettings]  = useState(() => ({ ...DEF, ...currentSettings(ls("fvr_cfg", DEF)) }));
   const [settingsSync, setSettingsSync] = useState({ status:"loading", revision:0, updatedAt:null });
   const [quotes,     setQuotes]    = useState(() => ls("fvr_quotes",  []));
   const [metrics,    setMetrics]   = useState(() => ls("fvr_metrics", { visits:0, started:0, generated:0, sentWhatsapp:0 }));
@@ -2314,7 +2271,7 @@ export default function App() {
   }, []);
 
   const saveSettings = async (s) => {
-    const candidate = { ...DEF, ...s };
+    const candidate = { ...DEF, ...currentSettings(s) };
     const adminKey = sessionStorage.getItem("fvr_admin_key") || "";
     const baseRevision = settingsSync.status === "missing" ? 0 : settingsSync.revision;
     const remote = await saveCanonicalSettings(candidate, adminKey, baseRevision);
@@ -2394,7 +2351,7 @@ export default function App() {
   };
 
   // Acepta overrides de datos/resultados para enviar la modalidad ALTERNATIVA
-  // (ej: calculó aéreo pero está viendo marítimo por kilo) sin recargar nada.
+  // (ej: calculó aéreo pero está viendo marítimo por m³) sin recargar nada.
   const handleWhatsApp = (dOverride, rOverride) => {
     const d = dOverride || formData;
     const r = rOverride || results;

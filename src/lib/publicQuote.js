@@ -1,8 +1,9 @@
-import { calculate, dhlEligibility, packTotals } from "./calc.js";
+import { calculate, dhlEligibility, packTotals, assertCurrentMode } from "./calc.js";
 
 export const originAllowed = (origin) => !/^(espa[nñ]a|spain)$/i.test(String(origin || "").trim());
 const commercial = d => ({ ...d, subTipo:"comercial", seaMode:"m3" });
 export const publicQuote = (input, settings) => {
+  assertCurrentMode(input);
   const d = commercial(input);
   if (!originAllowed(d.paisOrigen || d.origenSel)) throw new Error("Origen no disponible");
   if (d.tipo !== "barco") d.tipo = settings.dhlActive && settings.dhlPublic && dhlEligibility(d, settings).ok ? "dhl" : "avion";

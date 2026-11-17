@@ -14,6 +14,7 @@
    con localStorage (degradación limpia, sin romper nada). */
 
 import pg from "pg";
+import { assertCurrentMode } from "../src/lib/calc.js";
 
 // Pool a nivel módulo: se reusa entre invocaciones calientes de la lambda
 let pool;
@@ -32,6 +33,8 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const b = req.body || {};
       if (!b.id || typeof b.id !== "string" || b.id.length > 40) return res.status(400).json({ error: "id inválido" });
+      try { assertCurrentMode(b.formData || {}); }
+      catch (error) { return res.status(400).json({ error: error.message }); }
       // límites defensivos: los jsonb quedan acotados
       const formData = b.formData && JSON.stringify(b.formData).length < 20000 ? b.formData : null;
       const results  = b.results  && JSON.stringify(b.results).length  < 20000 ? b.results  : null;

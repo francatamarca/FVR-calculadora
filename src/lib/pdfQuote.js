@@ -12,6 +12,7 @@
    - Todo en UNA página A4. */
 
 import { deliveryEstimate } from "./dhlZones.js";
+import { assertCurrentMode } from "./calc.js";
 import { QUOTE_LOGO } from "../data/quoteLogo.js";
 
 const fmt = (n, dec = 2) =>
@@ -19,6 +20,7 @@ const fmt = (n, dec = 2) =>
 const USD = (n) => `USD ${fmt(n)}`;
 
 export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
+  assertCurrentMode(d);
   const jspdfMod = await import("jspdf");
   const jsPDF = jspdfMod.jsPDF || jspdfMod.default; // browser (Vite) y Node resuelven distinto
   const autoTableMod = await import("jspdf-autotable");
@@ -41,7 +43,7 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
   const tipo = r.isDhl ? "DHL Express · Envío Comercial"
     : d.tipo === "avion"
       ? (d.subTipo === "personal" ? "Avión · Envío Personal (Franquicia)" : "Avión · Envío Comercial")
-      : (d.seaMode === "kg" ? "Barco · Por kilo" : "Barco · Por m³");
+      : "Barco · Por m³";
   const del = r.isDhl ? deliveryEstimate(d.cp, s) : null;
 
   const logoData = opts.logoDataUrl || QUOTE_LOGO;
@@ -141,13 +143,6 @@ export async function buildQuotePDF(d, r, dolar, s, opts = {}) {
       ["Peso facturable (el mayor)", `${fmt(r.pFact)} kg`],
       [`Flete aéreo (USD ${r.airRate}/kg)`, USD(r.flete)],
       [`Seguro (${s.insurance}%)`, USD(r.seguro)],
-    );
-  } else if (r.seaKg) {
-    flete.push(
-      ["Peso real total", `${fmt(r.peso)} kg`],
-      [`Flete marítimo (USD ${r.airRate}/kg)`, USD(r.flete)],
-      [`Seguro (${s.insurance}%)`, USD(r.seguro)],
-      ["CIF / Valor en aduana", USD(r.cif)],
     );
   } else {
     flete.push(

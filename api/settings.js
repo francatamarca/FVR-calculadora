@@ -32,7 +32,7 @@ const ensureTable = async () => {
 };
 
 const responseFromRow = (row) => ({
-  settings: row?.settings || null,
+  settings: row?.settings ? sanitizeSettings(row.settings) : null,
   revision: Number(row?.revision || 0),
   updatedAt: row?.updated_at || null,
 });

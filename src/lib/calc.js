@@ -4,14 +4,13 @@
    NO cambiar fórmulas sin validar contra los tests de tests/calc.test.js. */
 
 export const DEF = {
-  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1, seaRateKg: 13,
-  airCustomsPerKg: 3, seaCustomsPerKg: 3, seaCustomsPerM3: 50,
+  airRateUSA: 20, airRateChina: 23, airRateEspana: 23, seaRate: 600, seaMin: 1,
+  airCustomsPerKg: 3, seaCustomsPerM3: 50,
   insurance: 1, duty: 20, stat: 3, vat: 21,
   addVat: 20, gains: 6, ib: 2.5,
   addVatOn: true, gainsOn: true, ibOn: true,
   pickup: 20, pickupSea: 0, handling: 15, handlingMaxKg: 3, domestic: 15, domesticSea: 0,
-  handlingSea: 20, domesticSeaKg: 0,
-  feeType: "percentage", feePct: 8, feePctSea: 5, feePctKg: 8, feeBase: "fob", feeFixed: 150, feeFixedSea: 150, feeFixedKg: 150,
+  feeType: "percentage", feePct: 8, feePctSea: 5, feeBase: "fob", feeFixed: 150, feeFixedSea: 150,
   // ── DHL Express (China → Argentina, solo comercial) ──
   // dhlActive: modalidad habilitada (interno siempre la ve si está activa).
   // dhlPublic: visible para clientes en la calculadora pública (feature flag).
@@ -29,6 +28,18 @@ export const DEF = {
   validezDias: 7,
   manualDolar: null,
   legal: "Los valores calculados son estimativos y pueden variar según clasificación arancelaria, documentación comercial, tipo de mercadería, canal de importación, cotización del dólar, costos operativos y normativa vigente al momento de la operación.",
+};
+
+// Sólo conservar parámetros de las modalidades vigentes, también al cargar
+// configuraciones antiguas del navegador o de la base central.
+export const currentSettings = (input = {}) => Object.fromEntries(
+  Object.entries(input).filter(([key]) => Object.prototype.hasOwnProperty.call(DEF, key)),
+);
+
+export const assertCurrentMode = (d) => {
+  if (d.tipo === "barco" && d.seaMode && d.seaMode !== "m3") {
+    throw new Error("Modalidad no disponible. Elegí marítimo por m³ y cargá el volumen.");
+  }
 };
 
 /* ── BULTOS MÚLTIPLES ───────────────────────────────────────
@@ -97,7 +108,7 @@ export const calculateDhl = (d, s) => {
   const cantidad = +d.cantidad > 0 ? +d.cantidad : null;
 
   return {
-    isDhl: true, isAir: false, seaKg: false, seaM3: false, byWeight: true,
+    isDhl: true, isAir: false, seaM3: false, byWeight: true,
     internalTaxes: false, isPersonal: false, hasHandling: true,
     fob, peso, pVol, pFact, m3: 0, m3Fact: 0, airRate,
     flete, fleteBase, customsPerKg, customsOverride: hasOverride,
@@ -123,20 +134,19 @@ export const dhlEligibility = (d, s) => {
 };
 
 export const calculate = (d, s) => {
+  assertCurrentMode(d);
   if (d.tipo === "dhl") return calculateDhl(d, s); // modalidad independiente
   const fob  = +d.fob || 0;
   const peso = +d.peso || 0;
   const { volCm3 } = packTotals(d); // volumen total (multi-bulto o legacy)
   const isAir      = d.tipo === "avion";
-  const seaKg      = d.tipo === "barco" && d.seaMode === "kg";   // marítimo por kilo
-  const seaM3      = d.tipo === "barco" && !seaKg;               // marítimo por m³
-  const byWeight   = isAir || seaKg;                             // se cobra por peso facturable
+  const seaM3      = d.tipo === "barco";
+  const byWeight   = isAir;
   const internalTaxes = seaM3;                                   // impuestos internos: solo marítimo m³
   const isPersonal = isAir && d.subTipo === "personal";
 
   let flete = 0, pVol = 0, pFact = 0, m3 = 0, m3Fact = 0, airRate = 0;
-  if (byWeight) {
-    if (isAir) {
+  if (isAir) {
       // Aéreo: peso facturable = el mayor entre volumétrico y real.
       // Volumen = Σ de todos los bultos (packageGroups o legacy L×A×H×bultos).
       pVol  = volCm3 / 5000;
@@ -144,12 +154,6 @@ export const calculate = (d, s) => {
       airRate = d.origenSel === "Estados Unidos (USA)" ? (+s.airRateUSA || 0)
               : d.origenSel === "España"               ? (+s.airRateEspana || 0)
               : (+s.airRateChina || 0);
-    } else {
-      // Marítimo por kilo: SOLO el peso real (sin volumétrico)
-      pVol  = 0;
-      pFact = peso;
-      airRate = +s.seaRateKg || 0;
-    }
     flete = pFact * airRate;
   } else {
     m3     = +d.m3manual || 0;
@@ -162,13 +166,11 @@ export const calculate = (d, s) => {
      segundo solo forma seguro, CIF y tributos y nunca se duplica en el total.
 
      - Aereo (personal y comercial): peso facturable x USD 3/kg.
-     - Maritimo por kg: peso facturable x USD 3/kg.
      - Maritimo por m3: volumen facturable x USD 50/m3. */
   const customsPerUnit = isAir ? (+s.airCustomsPerKg || 0)
-    : seaKg ? (+s.seaCustomsPerKg || 0)
     : seaM3 ? (+s.seaCustomsPerM3 || 0)
     : null;
-  const fleteBase = (isAir || seaKg) ? pFact * customsPerUnit
+  const fleteBase = isAir ? pFact * customsPerUnit
     : seaM3 ? m3Fact * customsPerUnit
     : flete;
 
@@ -198,28 +200,23 @@ export const calculate = (d, s) => {
   }
 
   const pickup     = isAir ? (+s.pickup || 0) : (+s.pickupSea || 0);
-  // En avión el handling conserva su regla por peso. En marítimo por kilo es
-  // un cargo fijo por operación, sin umbral. Barco por m³ no tiene handling.
-  const hasHandling = isAir || seaKg;
+  // Barco por m³ no tiene handling; el aéreo conserva su regla por peso.
+  const hasHandling = isAir;
   const handlingMaxA = (s.handlingMaxKg    != null && s.handlingMaxKg    !== "" ? +s.handlingMaxKg    : 3);
   const handling   = isAir ? (pFact < handlingMaxA ? (+s.handling || 0) : 0)
-                   : seaKg ? (+s.handlingSea || 0)
                    : 0;
   const domestic   = isAir ? (+s.domestic || 0)
-                   : seaKg ? (+s.domesticSeaKg || 0)
                    : (+s.domesticSea || 0);
   const baseCost = flete + seguro + duty + stat + iva + addVat + gains + ib + pickup + handling + domestic;
 
-  // Honorarios: % o monto fijo, diferenciado por modalidad (avión / barco m³ / marítimo por kilo).
-  // Cada modalidad usa su valor; si no está configurado, cae al de barco y luego al de avión.
-  const pick = (k, kSea, kKg) => {
+  // Honorarios: % o monto fijo, diferenciado entre avión y barco por m³.
+  const pick = (k, kSea) => {
     if (isAir) return +s[k] || 0;
-    if (seaKg && s[kKg] != null && s[kKg] !== "") return +s[kKg];
     if (s[kSea] != null && s[kSea] !== "") return +s[kSea];
     return +s[k] || 0;
   };
-  const feePctEff   = pick("feePct",   "feePctSea",   "feePctKg");
-  const feeFixedEff = pick("feeFixed", "feeFixedSea", "feeFixedKg");
+  const feePctEff   = pick("feePct",   "feePctSea");
+  const feeFixedEff = pick("feeFixed", "feeFixedSea");
   let fees = 0;
   if (s.feeType === "fixed") {
     fees = feeFixedEff;
@@ -237,7 +234,7 @@ export const calculate = (d, s) => {
   const unitario = cantidad ? totalGen / cantidad : null;
 
   return {
-    fob, isAir, seaKg, seaM3, byWeight, internalTaxes, isPersonal, hasHandling,
+    fob, isAir, seaM3, byWeight, internalTaxes, isPersonal, hasHandling,
     peso, pVol, pFact, m3, m3Fact, airRate,
     flete, fleteBase, customsPerUnit, seguro, cif, duty, stat, ivaBase, iva,
     addVat, gains, ib, pickup, handling, domestic, fees,
@@ -246,7 +243,7 @@ export const calculate = (d, s) => {
 };
 
 /* ── COMPARADOR DE MODALIDADES ──────────────────────────────
-   Calcula las 3 modalidades con los mismos datos (cuando alcanzan)
+   Compara aéreo, DHL y marítimo por m³ con los mismos datos (cuando alcanzan)
    y marca la recomendada (la más económica disponible).
    El m³ para barco se estima desde las medidas si no fue cargado
    (L×A×H en cm → m³), multiplicado por bultos si hay. */
@@ -265,11 +262,6 @@ export const compareModes = (d, s) => {
   const dhlE = dhlEligibility(d, s);
   if (dhlE.ok) {
     out.push({ key: "dhl", label: "⚡ DHL Express", nota: "Más rápido", d: { ...d, tipo: "dhl", subTipo: "comercial" }, r: dhlE.r });
-  }
-  if (+d.peso > 0) {
-    const data = { ...d, tipo: "barco", seaMode: "kg" };
-    out.push({ key: "barcoKg", label: "🚢 Barco por kilo", nota: "Ideal bajo peso",
-      d: data, r: calculate(data, s) });
   }
   if (m3Est > 0) {
     const data = { ...d, tipo: "barco", seaMode: "m3", m3manual: m3Est };

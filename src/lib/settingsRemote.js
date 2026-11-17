@@ -1,3 +1,5 @@
+import { currentSettings } from "./calc.js";
+
 const SETTINGS_ENDPOINT = "/api/settings";
 
 const parseResponse = async (res, fallbackMessage) => {
@@ -15,7 +17,7 @@ export const fetchCanonicalSettings = async (fetchImpl = fetch) => {
   });
   const body = await parseResponse(res, "No se pudo leer la configuración central.");
   return {
-    settings: body.settings && typeof body.settings === "object" ? body.settings : null,
+    settings: body.settings && typeof body.settings === "object" ? currentSettings(body.settings) : null,
     revision: Number(body.revision || 0),
     updatedAt: body.updatedAt || null,
   };
@@ -31,14 +33,14 @@ export const saveCanonicalSettings = async (settings, adminKey, baseRevision, fe
       "Cache-Control": "no-cache",
       "x-admin-key": adminKey,
     },
-    body: JSON.stringify({ settings, baseRevision }),
+    body: JSON.stringify({ settings: currentSettings(settings), baseRevision }),
   });
   const body = await parseResponse(res, "No se pudo guardar la configuración central.");
   if (!body.settings || typeof body.settings !== "object") {
     throw new Error("El servidor no devolvió la configuración guardada.");
   }
   return {
-    settings: body.settings,
+    settings: currentSettings(body.settings),
     revision: Number(body.revision || 0),
     updatedAt: body.updatedAt || null,
   };

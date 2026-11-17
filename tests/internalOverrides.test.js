@@ -32,16 +32,14 @@ describe("ajustes temporales de la calculadora interna", () => {
     expect(central.seaRate).toBe(450);
   });
 
-  it("aplica al instante las tarifas por kilo y volumen en su modalidad", () => {
+  it("aplica las tarifas aéreas y marítimas por volumen en su modalidad", () => {
     const settings = mergeTemporarySettings(DEF, {
       airRateChina: "31",
-      seaRateKg: "17",
       seaRate: "444",
       seaMin: "1",
     });
 
     expect(calculate({ ...quote, tipo: "avion" }, settings).flete).toBeCloseTo(65 * 31);
-    expect(calculate({ ...quote, tipo: "barco", seaMode: "kg" }, settings).flete).toBeCloseTo(65 * 17);
     expect(calculate({ ...quote, tipo: "barco", seaMode: "m3" }, settings).flete).toBeCloseTo(444);
   });
 
@@ -56,17 +54,15 @@ describe("ajustes temporales de la calculadora interna", () => {
   it("propaga derecho y tarifas temporales a todas las filas del comparador", () => {
     const settings = mergeTemporarySettings(DEF, {
       airRateChina: "31",
-      seaRateKg: "17",
       seaRate: "444",
       dhlRateHigh: "19",
     });
     const data = { ...quote, aiDutyRate: resolveInternalDutyRate("18", { duty: "35" }) };
     const modes = compareModes(data, settings);
 
-    expect(modes).toHaveLength(4);
+    expect(modes).toHaveLength(3);
     expect(modes.every(mode => mode.r.effectiveDutyPct === 35)).toBe(true);
     expect(modes.find(mode => mode.key === "aereo").r.airRate).toBe(31);
-    expect(modes.find(mode => mode.key === "barcoKg").r.airRate).toBe(17);
     expect(modes.find(mode => mode.key === "barcoM3").r.flete).toBeCloseTo(444);
     expect(modes.find(mode => mode.key === "dhl").r.airRate).toBe(19);
   });

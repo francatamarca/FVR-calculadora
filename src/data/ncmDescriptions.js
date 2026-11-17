@@ -1,7 +1,7 @@
 /* ── DESCRIPCIONES OFICIALES NCM (8 dígitos) ────────────────
    GENERADO por scripts/update-tariff-base.mjs — NO editar a mano.
    SOLO SERVIDOR (funciones /api/*): el cliente nunca importa este módulo.
-   Fuente: nomenclador ARCA 2026-11-16 (español, encabezado de partida
+   Fuente: nomenclador ARCA 2026-11-17 (español, encabezado de partida
    + niveles intermedios y descripción de la apertura única SIM). */
 
 export const NCM_DESC = {
@@ -10511,9 +10511,9 @@ export const NCM_DESC = {
 };
 
 export const NCM_DESC_META = {
-  "date": "2026-11-16",
+  "date": "2026-11-17",
   "source": "Arancel Integrado ARCA (nomenclador SIM)",
   "positions": 10503,
-  "downloadedAt": "2026-11-16T20:27:18.935Z",
-  "checksum": "44ddfa380736151f0c9be1d152735931c713ec956d55536e0196d1aa2da8fa71"
+  "downloadedAt": "2026-11-17T19:10:19.911Z",
+  "checksum": "d3995bb746fde5b59439ded8b84df4f82bd6eb80db0205977fba3959d6ef7f70"
 };

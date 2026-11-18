@@ -68,8 +68,11 @@ export const packGroups = (d) => {
 
 export const packTotals = (d) => {
   const gs = packGroups(d);
+  const measuredVolume = gs.reduce((sum, g) => sum + g.cant * g.largo * g.ancho * g.alto, 0);
   return {
-    volCm3: gs.reduce((sum, g) => sum + g.cant * g.largo * g.ancho * g.alto, 0),
+    // Adaptador por lote: volumen TOTAL declarado, sin inventar dimensiones.
+    // Las medidas reales, cuando existen, siguen siendo la fuente prioritaria.
+    volCm3: measuredVolume || (+d.totalVolumeM3 > 0 ? +d.totalVolumeM3 * 1e6 : 0),
     pesoGrupos: gs.reduce((sum, g) => sum + g.cant * (g.pesoCaja || 0), 0),
     grupos: gs,
   };

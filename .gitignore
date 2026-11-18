@@ -3,3 +3,6 @@ node_modules/
 dist/
 .env
 .env.local
+public/agent-version.json
+public/agent-tariffs.json
+output/agent-quotes/

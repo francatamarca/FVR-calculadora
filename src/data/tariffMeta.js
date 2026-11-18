@@ -1,8 +1,8 @@
 /* GENERADO por scripts/update-tariff-base.mjs — NO editar a mano. */
 export const TARIFF_META = {
-  "baseDate": "2026-11-17",
+  "baseDate": "2026-11-18",
   "source": "Arancel Integrado ARCA — DIE extrazona consolidado",
   "positions": 10503,
-  "downloadedAt": "2026-11-17T19:10:19.911Z",
-  "checksum": "d3995bb746fde5b59439ded8b84df4f82bd6eb80db0205977fba3959d6ef7f70"
+  "downloadedAt": "2026-11-18T14:52:52.107Z",
+  "checksum": "c99f9215bc839d5fd6d20a8ec898d64e7658305562bcfc0b38f22bf52d7bed5c"
 };

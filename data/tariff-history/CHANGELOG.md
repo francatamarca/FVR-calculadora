@@ -90,3 +90,8 @@ Nota de revisión del parser: las 96 entradas excluidas en la última regeneraci
 - Posiciones: 10503 (+0 / −0)
 - Aranceles modificados: 0
 - Checksum: a25d8fe2949e0595e0dd7a7e16eb738b8a1069583ef10439e1c5ce024be064d4
+
+## 2026-11-23 (corrida 2026-11-23T22:02:17.268Z)
+- Posiciones: 10503 (+0 / −0)
+- Aranceles modificados: 0
+- Checksum: d1314da762a86d66f4b372e97c71208966dbd85d6e4c1037da8c920b66f13dda
